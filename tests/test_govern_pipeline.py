@@ -198,8 +198,10 @@ def test_read_parquet_returns_values(monkeypatch) -> None:
 
     pq_mod = types.SimpleNamespace(read_table=lambda path, columns=None: FakeTable())
     fake = types.ModuleType("pyarrow")
+    fake.__path__ = []
     fake.parquet = pq_mod
     monkeypatch.setitem(sys.modules, "pyarrow", fake)
+    monkeypatch.setitem(sys.modules, "pyarrow.parquet", pq_mod)
     rows = pl._read_parquet(Path("x.parquet"), None)
     assert rows == [{"text": "alpha"}, {"text": "beta"}]
 
