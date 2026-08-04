@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv and virtual environments
+.venv/
+.venv-*
+.worktrees/
+
+# Local secrets and machine state
+.env
+.env.*
+*.local
+
+# LLM assets and generated outputs
+data/
+models/
+artifacts/
+runs/
+logs/
+reports/generated/
+reports/
+requirements-*.lock.txt
+
+# Large model/data/checkpoint formats
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.gguf
+*.parquet
+*.arrow
+*.jsonl.zst
+*.tar
+*.tar.gz
+*.zip
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/

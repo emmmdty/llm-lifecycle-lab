@@ -1,0 +1,20 @@
+[project]
+name = "llm-lifecycle-lab"
+version = "0.1.0"
+description = "A staged learning lab for the LLM lifecycle, from data governance to deployment."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [
+  { name = "emmmdty" },
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

@@ -1,0 +1,27 @@
+name: Stage task
+description: Track one bounded project stage task.
+title: "[Stage X] "
+labels:
+  - stage
+body:
+  - type: input
+    id: stage
+    attributes:
+      label: Stage
+      description: Which single stage is this for?
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal and acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Include local/server/GPU/data/model boundaries.
+    validations:
+      required: true
+
