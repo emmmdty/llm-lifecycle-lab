@@ -54,7 +54,7 @@ def _read_parquet(path: Path, projection: tuple[str, ...] | None) -> list[dict]:
         table = pq.read_table(path, columns=list(projection))
     else:
         table = pq.read_table(path)
-    return [dict(zip(table.column_names, row)) for row in table.to_pylist()]
+    return table.to_pylist()
 
 
 def load_records(spec: DatasetSpec, raw_root: Path) -> list[tuple[str | None, dict]]:

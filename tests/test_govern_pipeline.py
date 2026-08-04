@@ -184,6 +184,26 @@ def test_extract_texts_and_chars() -> None:
     assert count_chars([record]) == 4 + 2 + 9 + 2
 
 
+def test_read_parquet_returns_values(monkeypatch) -> None:
+    import sys
+    import types
+
+    from govern import pipeline as pl
+
+    class FakeTable:
+        column_names = ["text"]
+
+        def to_pylist(self) -> list[dict]:
+            return [{"text": "alpha"}, {"text": "beta"}]
+
+    pq_mod = types.SimpleNamespace(read_table=lambda path, columns=None: FakeTable())
+    fake = types.ModuleType("pyarrow")
+    fake.parquet = pq_mod
+    monkeypatch.setitem(sys.modules, "pyarrow", fake)
+    rows = pl._read_parquet(Path("x.parquet"), None)
+    assert rows == [{"text": "alpha"}, {"text": "beta"}]
+
+
 def test_registry_complete_and_consistent() -> None:
     for name, spec in DATASETS.items():
         assert spec.name == name
