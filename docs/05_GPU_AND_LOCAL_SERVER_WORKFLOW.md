@@ -167,14 +167,21 @@ git fetch --all --prune
 git pull --ff-only
 ```
 
-服务器使用 GitHub 代理镜像。Codex 应先检查：
+服务器 GitHub 访问为直连 HTTPS，不使用代理镜像（2026-08-04 验证：github.com 可达，git fetch/push 正常；此前文档中的镜像假设已移除）。`tongjiakai` 用户已配置与本地一致的 GitHub 环境：
+
+- git 身份：`user.name=emmmdty`、`user.email=emmmtjk@163.com`；
+- 认证：gh CLI（`~/.local/bin/gh`）凭据助手，token 位于 `~/.config/gh/hosts.yml`（权限 0600）；
+- 项目仓库 `main` 已设置上游跟踪 `origin/main`。
+
+若遇到认证或连通问题，先检查：
 
 ```bash
 git remote -v
-git config --global --get-regexp '^url\..*\.insteadof$' || true
+gh auth status
+git fetch --dry-run
 ```
 
-不得覆盖既有全局代理配置。
+不得覆盖既有全局 git 配置。
 
 5090 不可达且使用 4090 fallback 时：
 
