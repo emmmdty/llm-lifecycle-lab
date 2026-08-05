@@ -305,9 +305,7 @@ class Trainer:
         torch.set_rng_state(payload["torch_rng_state"])
         cuda_rng_state = payload.get("cuda_rng_state")
         if cuda_rng_state is not None and self.device.type == "cuda":
-            torch.cuda.set_rng_state_all(
-                [state.to(self.device) for state in cuda_rng_state]
-            )
+            torch.cuda.set_rng_state_all(cuda_rng_state)
         self.global_step = int(payload["global_step"])
         self.resume_info = {
             "checkpoint": str(checkpoint),
