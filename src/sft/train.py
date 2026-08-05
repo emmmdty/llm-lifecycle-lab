@@ -36,6 +36,7 @@ from pretrain.data import BlockSampler, open_stream_memmap, validation_offsets
 from pretrain.schedule import WarmupCosineSchedule
 
 from .config import SftConfig, effective_batch_tokens
+from .prep import TRAIN_SPLIT, VAL_SPLIT
 from .template import (
     TINY_ASSISTANT_PREFIX,
     TINY_USER_PREFIX,
