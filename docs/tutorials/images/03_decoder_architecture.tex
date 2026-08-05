@@ -1,0 +1,38 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage[fontset=none]{ctex}
+\setCJKmainfont{Noto Serif CJK SC}
+\usepackage{tikz}
+\usetikzlibrary{positioning, fit}
+\begin{document}
+\begin{tikzpicture}[
+  blk/.style={draw, rounded corners=2pt, minimum height=7mm, inner sep=3pt, font=\small, align=center},
+  lbl/.style={font=\scriptsize, gray},
+  arrow/.style={-stealth, thick},
+  layer/.style={draw, rounded corners=3pt, minimum height=6mm, inner sep=4pt, font=\small},
+]
+\node[font=\bfseries\small] at (4.4,12.6) {阶段 4 的 Decoder-only causal LM（18.1M 参数）};
+
+\node[blk, fill=green!15, draw=green!60!black] (tok) at (0,11) {token 序列\\$t_1, t_2, \ldots, t_n$};
+\node[arrow] (a1) at (0,10.35) {};
+
+\node[blk, fill=blue!15, draw=blue!60!black, minimum height=14mm] (emb) at (0,8.9) {Token Embedding $+$\\Position Embedding\\(词表 16384 $\times$ 512)};
+\node[lbl, anchor=west] at (emb.east) {Token Embedding 与 LM Head 共享权重};
+
+\node[arrow] (a2) at (0,8.0) {};
+
+\node[layer, fill=orange!15, draw=orange!60!black, minimum height=34mm] (layer) at (0,5.4) {};
+\node[anchor=north, font=\small\bfseries] at (layer.north) {Transformer Layer $\times 3$};
+\node[font=\small, align=left] at (0,5.4) {LayerNorm 1\\[2pt] Multi-Head Attention (8 heads)\\ \footnotesize QKV + 因果掩码 + 残差\\[3pt] LayerNorm 2\\[2pt] FFN: GELU(512$\rightarrow$2048$\rightarrow$512)\\+ 残差};
+\node[lbl, anchor=west, align=left] at (3.6,5.6) {因果掩码：位置 $i$ 只能\\attend 到位置 $\le i$};
+
+\node[arrow] (a3) at (0,3.1) {};
+
+\node[blk, fill=blue!15, draw=blue!60!black] (ln) at (0,2.1) {LayerNorm};
+\node[arrow] (a4) at (0,1.45) {};
+
+\node[blk, fill=blue!15, draw=blue!60!black] (head) at (0,0.35) {LM Head（与 Embedding 共享，16384 类）};
+\node[arrow] (a5) at (0,-0.3) {};
+
+\node[blk, fill=green!15, draw=green!60!black] (out) at (0,-1.4) {logits $\rightarrow$ softmax $\rightarrow$ 预测下一个 token};
+\end{tikzpicture}
+\end{document}

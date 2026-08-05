@@ -260,3 +260,32 @@ uv pip freeze: reports/4090-train-freeze.txt
 - 服务器：通过 `git fetch` + checkout 同步源码，`models/`、`data/`、`logs/`、`reports/`、`artifacts/`、`runs/`、`.venv-*` 和 `requirements-*-lock.txt` 等未跟踪资产保持原状，未被覆盖或删除。
 - 服务器 GitHub 访问：`tongjiakai` 用户已配置与本地一致的 gh CLI 认证（`~/.local/bin/gh`、`~/.config/gh/hosts.yml` 0600）和 git 身份；实测直连 github.com 可用，无代理镜像，git fetch/push 验证通过。
 - 2026-08-05 补充：github.com 直连在服务器上间歇性不可达，已配置长期 fallback——`origin` fetch URL 指向 `gh-proxy.com` 镜像（读走镜像），push URL 保持直连 GitHub（gh 凭据仅对 github.com 生效）；镜像完整性以 commit 哈希校验。
+
+## 2026-08-05 补充：阶段 4 TinyStories 快速预训练完成
+
+阶段 4 在 5090 上完成：18,108,928 参数（18.1M）Decoder-only causal LM 在 TinyStories train 全语料（392,186,497 tokens，含 BOS/EOS）上训练 11,969 步，GPU 用时 646.8 秒（预算 2 小时）。
+
+服务器新增资产：
+
+```text
+data/processed/tinystories/tokens/tinystories-bpe-16k/
+  train.bin 1.57G（392,186,497 tokens int32 流，1,799,248 docs）
+  validation.bin 12M（3,131,630 tokens，15,389 docs）
+  train.json / validation.json（meta：revision、license、special_ids、环境）
+
+runs/20260805-151300/
+  run.json（command/config/environment/hardware/revision/seed/summary）
+  metrics.jsonl（11,969 行：loss/lr/grad_norm/tokens_s/step_time/val/peak_mem）
+  samples.jsonl（init 随机乱码 vs final 连贯故事）
+  checkpoints/（step-1000 … step-11969 共 12 个 + latest.pt）
+
+runs/20260805-145445/  smoke + resume 连续性证据（resume_continuity）
+logs/train/formal-20260805.log、prepare-20260805.log
+reports/20260805-151300.json
+```
+
+关键指标：平均 606K tokens/s、0.054s/step、峰值显存 1.22GB；train loss 9.807→1.525；val loss 3.192→1.665（ppl 5.28）；resume 后 loss 逐位一致。
+
+环境补充：`.venv-train` 于本阶段追加安装 `pytest>=8.0`（运行测试用），`uv pip check` 通过；freeze 未变（pytest 非训练依赖）。
+
+阶段 5 可执行条件：本阶段训练框架（prepare/train/generate、checkpoint/resume、记录）已就绪；阶段 5 仅需新增 30M–60M 模型配置与 Wikitext 数据准备。

@@ -6,16 +6,15 @@ English summary: this repository is a staged learning lab for the LLM lifecycle,
 
 ## 当前阶段
 
-当前项目处于正式开发前准备阶段：仓库初始化和服务器基线已经开始建立，后续训练、评测、量化和部署仍按阶段推进。
+项目已完成数据治理（阶段 2）、tokenizer（阶段 3）和 TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）。当前执行阶段 5（Wikitext 正式教学预训练，30M–60M 模型）的开发准备。
 
-当前停止条件：
+阶段 4 停止条件已满足：
 
-- 本地仓库有清晰 README、许可证、GitHub 社区文件和忽略规则；
-- 项目文档之间的路径、服务器、数据、模型和环境描述一致；
-- 服务器已有资产完成只读盘点；
-- 远端环境、数据和模型准备只在用户明确授权时执行；
-- 不运行 GPU 训练、推理或 smoke test；
-- 不修改服务器系统配置。
+- 本地单元测试通过（torch-free 核心逻辑全测，torch 测试在服务器全量跑）；
+- 服务器按顺序完成单 batch、5 step smoke、150 step 基准与人工确认后正式训练；
+- loss 持续下降（val ppl 24.3 → 5.28），checkpoint resume 曲线逐位连续，训练后生成明显连贯；
+- command/config/environment/hardware/revision/seed/metrics 全部记录在 `runs/` 与 `reports/`；
+- 正式运行 GPU 总时长 646.8 秒，远低于 2 小时预算。
 
 ## 本地与服务器职责
 
