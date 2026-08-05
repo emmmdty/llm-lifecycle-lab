@@ -188,6 +188,7 @@ def generate_all(
     seeds: tuple[int, ...] = (1,),
     bos_id: int | None = None,
 ) -> list[str]:
+    greedy = temperature <= 0.0
     return [
         generate_conversation(
             model=model,
@@ -197,7 +198,7 @@ def generate_all(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_k=top_k,
-            greedy=False,
+            greedy=greedy,
             seed=seeds[0],
             eos_id=eos_id,
             device=device,
