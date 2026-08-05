@@ -29,11 +29,14 @@ def test_stage5_configs_load_and_are_in_budget() -> None:
     five = load("tinystories-5m.json")
     sixty_four = load("tinystories-64m.json")
     wikitext = load("wikitext.json")
+    wikitext_27m = load("wikitext-27m.json")
     assert five.model.estimate_params() == 5_137_024
     assert sixty_four.model.estimate_params() == 65_394_688
     assert wikitext.model.vocab_size == 32768
+    assert wikitext.model.estimate_params() == 5_316_992
+    assert wikitext_27m.model.estimate_params() == 26_759_680
     assert wikitext.train.seq_len == 1024
-    for config in (five, sixty_four, wikitext):
+    for config in (five, sixty_four, wikitext, wikitext_27m):
         params = config.model.estimate_params()
         assert PARAM_RANGE[0] <= params <= PARAM_RANGE[1]
         assert_param_budget(config.model)
@@ -160,6 +163,11 @@ def test_diversity_stats() -> None:
 
 
 def test_committed_configs_json_parseable() -> None:
-    for name in ("tinystories-5m.json", "tinystories-64m.json", "wikitext.json"):
+    for name in (
+        "tinystories-5m.json",
+        "tinystories-64m.json",
+        "wikitext.json",
+        "wikitext-27m.json",
+    ):
         raw = json.loads((CONFIGS / name).read_text(encoding="utf-8"))
         assert raw["train"]["seq_len"] == raw["model"]["max_position_embeddings"]

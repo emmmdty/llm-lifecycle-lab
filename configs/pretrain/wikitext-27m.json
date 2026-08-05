@@ -1,11 +1,11 @@
 {
-  "run_name": "wikitext-5m",
+  "run_name": "wikitext-27m",
   "model": {
     "vocab_size": 32768,
-    "hidden_size": 128,
-    "num_hidden_layers": 5,
-    "num_attention_heads": 4,
-    "intermediate_size": 512,
+    "hidden_size": 512,
+    "num_hidden_layers": 3,
+    "num_attention_heads": 8,
+    "intermediate_size": 2048,
     "max_position_embeddings": 1024,
     "dropout": 0.0,
     "activation": "gelu",
