@@ -2,7 +2,7 @@
 
 > **学习目标**：先建立 tokenizer 的完整前置理论（为什么需要分词、三种文本粒度、标准四步管线、BPE/WordPiece/Unigram 三种算法、特殊 token、字节级编码、词汇量权衡、评价指标）；再动手在 TinyStories 语料上训练 16K 和 32K 两种 byte-level BPE，固定四个特殊 token 的 ID，与 Qwen 官方 tokenizer 对比英文/中文/代码的压缩效率，最后定量分析词汇量对 embedding/LM head 参数和序列长度的影响。
 >
-> **前置要求**：完成第一部分（环境与数据治理），有阶段 2 输出的 `data/processed/tinystories/{train,validation}.parquet` 和 `data/manifests/tinystories.json`；会用命令行与 Python。
+> **前置要求**：完成第一部分（环境与数据治理），有阶段 2 输出的 `data/processed/tinystories/{train,validation}.parquet`（Apache Parquet，列式存储数据格式）和 `data/manifests/tinystories.json`（manifest，清单文件，记录数据来源/许可证/统计）；会用命令行与 Python。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ## 1. 为什么需要 tokenizer？
 
-**模型不认识文字，只认识数字。** 一段文本进入 Transformer 之前，必须被转换成整数序列：
+**模型不认识文字，只认识数字。** 一段文本进入 Transformer（变换器架构，基于自注意力机制的大模型主干）之前，必须被转换成整数序列：
 
 ```text
 原始文本 → tokenizer 编码 → 整数 ID 序列 → Transformer → 输出概率 → tokenizer 解码 → 原始文本
@@ -18,10 +18,10 @@
 
 **tokenizer（分词器）**就是负责"文本 ↔ 数字"转换的组件。它是模型的**第一层**（编码）也是**最后一层**（解码）。它不参与梯度更新，但模型的一切行为都建立在它划定的词汇表之上：
 
-- 词汇表决定 embedding 和 LM head 的参数数量；
+- 词汇表决定 embedding（词嵌入矩阵，token ID → 向量）和 LM head（Language Model Head，语言模型头，向量 → token 概率）的参数数量；
 - 词汇表决定同样一段文字被切成多少个 token——token 越少，训练越快、上下文越长；
 - 词汇表在训练前**必须固定**，训练后不能随便加词；
-- 特殊 token（BOS/EOS/PAD/UNK）的 ID 必须在训练前钉死，否则 checkpoint 全部失效。
+- 特殊 token（BOS/EOS/PAD/UNK）的 ID 必须在训练前钉死，否则 checkpoint（模型检查点，训练中保存的参数快照）全部失效。
 
 ### 1.1 三个基础概念
 
@@ -31,7 +31,7 @@
 | **vocabulary（词表）** | 全部 token 到 ID 的映射表，模型只认识这张表里的东西 | 字典 |
 | **ID（编号）** | 每个 token 在词表中的整数下标 | 字典的页码 |
 
-"词表大小"用 `vocab_size` 表示。一个 `vocab_size=16384` 的 tokenizer，最多只有 16384 种 token，ID 范围是 `[0, 16383]`。
+"词表大小"用 `vocab_size`（vocabulary size，词表大小）表示。一个 `vocab_size=16384` 的 tokenizer，最多只有 16384 种 token，ID 范围是 `[0, 16383]`。
 
 ### 1.2 三种粒度：字符级、词级、子词级
 
@@ -65,8 +65,8 @@ flowchart LR
 
 | 步骤 | 干什么 | 例子 | 本项目设置 |
 | --- | --- | --- | --- |
-| 1. 归一化 | 统一文本形态：大小写、Unicode 规范化（NFKC 等）、去重音符号 | `Hello` → `hello`；全角转半角 | **不做**（保留原始大小写，避免丢信息） |
-| 2. 预分词 | 按空格/标点把文本切成"词块"，给核心算法定边界 | `"hello, world"` → `["hello", ",", "world"]` | **ByteLevel**：先转 UTF-8 字节流再切块 |
+| 1. 归一化 | 统一文本形态：大小写、Unicode（统一码，全球字符的统一编号标准）规范化（NFKC 等）、去重音符号 | `Hello` → `hello`；全角转半角 | **不做**（保留原始大小写，避免丢信息） |
+| 2. 预分词 | 按空格/标点把文本切成"词块"，给核心算法定边界 | `"hello, world"` → `["hello", ",", "world"]` | **ByteLevel**（字节级预分词器）：先转 UTF-8 字节流再切块 |
 | 3. 核心算法 | 学习合并规则，把词块拆/合成词表内的 token | `tokenization` → `token`+`ization` | **BPE**（下一节详述） |
 | 4. 后处理 | 追加特殊 token、套用 chat 模板 | `[BOS] hello [EOS]` | 不自动加，由训练代码显式加 |
 
@@ -74,7 +74,7 @@ flowchart LR
 
 ### 1.4 三种主流算法：BPE、WordPiece、Unigram
 
-**BPE（Byte Pair Encoding，字节对编码）**、**WordPiece**、**Unigram** 是三种最主流的子词算法：
+**BPE（Byte Pair Encoding，字节对编码）**、**WordPiece（词片算法）**、**Unigram（一元语法剪枝算法）**是三种最主流的子词算法：
 
 | 算法 | 方向 | 合并/剪枝准则 | 代表模型 |
 | --- | --- | --- | --- |
@@ -109,10 +109,10 @@ flowchart LR
 
 | 名称 | 作用 | 本项目字符串 |
 | --- | --- | --- |
-| **BOS**（beginning of sequence） | 句子开头标记，让模型知道"文本从这里开始" | `<|startoftext|>` |
-| **EOS**（end of sequence） | 句子结尾标记，生成时模型学会在合适位置输出它 | `<|endoftext|>` |
-| **PAD**（padding） | 填充短样本，让一个 batch 内序列等长；配合 attention mask 忽略 | `<|pad|>` |
-| **UNK**（unknown） | 词表外字符的统一出口 | `<|unk|>` |
+| **BOS**（Beginning Of Sequence，序列起始标记） | 句子开头标记，让模型知道"文本从这里开始" | `<|startoftext|>` |
+| **EOS**（End Of Sequence，序列结束标记） | 句子结尾标记，生成时模型学会在合适位置输出它 | `<|endoftext|>` |
+| **PAD**（Padding，填充标记） | 填充短样本，让一个 batch（批次，一次处理的样本组）内序列等长；配合 attention mask（注意力掩码，标记填充位置、禁止注意力）忽略 | `<|pad|>` |
+| **UNK**（Unknown，未知标记） | 词表外字符的统一出口 | `<|unk|>` |
 
 **为什么 ID 必须固定？** 训练时 embedding 层按 ID 查表，checkpoint 存的是"ID → 参数"。如果重新加载后 ID 对不上，参数就张冠李戴。所以本项目把 ID 0–3 固定给 BOS/EOS/PAD/UNK，训练后**强制断言** `token_to_id()` 结果，不符合直接报错。
 
@@ -120,7 +120,7 @@ flowchart LR
 
 ### 1.6 字节级 BPE：UTF-8 与中文的关系
 
-**UTF-8** 是互联网通用的 Unicode 编码：ASCII 字符 1 字节，汉字 3 字节，emoji 4 字节。例如：
+**UTF-8**（8-bit Unicode Transformation Format，Unicode 的变长字符编码）是互联网通用的字符编码：ASCII（American Standard Code for Information Interchange，美国信息交换标准代码）字符 1 字节，汉字 3 字节，emoji 4 字节。例如：
 
 ```text
 "t"        → 1 字节 (0x74)
@@ -139,7 +139,7 @@ flowchart LR
 
 词汇量不是越大越好，它牵动三件事：
 
-**① 参数量**（2.5 节细算）：embedding 矩阵和 LM head 的尺寸都是 `vocab_size × hidden_size`，通常不共享权重，所以：
+**① 参数量**（2.5 节细算）：embedding 矩阵和 LM head 的尺寸都是 `vocab_size × hidden_size`（hidden_size，隐藏层维度），通常不共享权重，所以：
 
 ```text
 embedding + LM head 参数量 = 2 × vocab_size × hidden_size
@@ -157,11 +157,11 @@ embedding + LM head 参数量 = 2 × vocab_size × hidden_size
 
 | 指标 | 含义 | 验收标准 |
 | --- | --- | --- |
-| **可逆性（roundtrip）** | `decode(encode(文本)) == 原文` | 必须 100% 通过，不是"基本一致" |
-| **tokens/character** | 每个字符平均消耗多少 token，越小压缩越狠 | 分类对比（英文/中文/代码） |
+| **可逆性（roundtrip，往返：编码后再解码）** | `decode(encode(文本)) == 原文` | 必须 100% 通过，不是"基本一致" |
+| **tokens/character（每字符平均 token 数）** | 每个字符平均消耗多少 token，越小压缩越狠 | 分类对比（英文/中文/代码） |
 | **特殊 token ID 固定** | BOS/EOS/PAD/UNK 的 ID 不随加载改变 | 训练后断言 + 重载后复测 |
 | **保存/重载一致** | `tokenizer.json` 加载后行为不变 | 重载后重跑 roundtrip 与 ID 检查 |
-| **语料可追溯** | 能查到训练语料、revision、许可证、seed | 记录在 manifest |
+| **语料可追溯** | 能查到训练语料、revision（版本/修订标识）、许可证、seed（随机种子，保证抽样可复现） | 记录在 manifest（清单文件） |
 
 ---
 
@@ -173,13 +173,13 @@ embedding + LM head 参数量 = 2 × vocab_size × hidden_size
 
 | 项 | 选择 | 理由 |
 | --- | --- | --- |
-| 训练语料 | TinyStories **train** split（1,799,248 篇文档，约 16 亿字符） | 阶段 4 第一个模型就在 TinyStories 上训练，词表和语料一致能减少额外变量 |
+| 训练语料 | TinyStories **train** split（split，数据切分；train 即训练子集，1,799,248 篇文档，约 16 亿字符） | 阶段 4 第一个模型就在 TinyStories 上训练，词表和语料一致能减少额外变量 |
 | 语料 revision | `modelscope snapshot 2026-07-29`（记录在 `data/manifests/tinystories.json`） | 满足"可追溯"验收 |
 | 词表 | `tinystories-bpe-16k`（vocab=16384）、`tinystories-bpe-32k`（vocab=32768） | 分别对应阶段 4（5M–20M 模型）和阶段 5（30M–60M 模型） |
 | 对照组 | Qwen3-0.6B-Base 官方 tokenizer（vocab=151936） | 生产级词表，训练语料覆盖中英文和代码 |
-| 资源 | **纯 CPU**，不需要 GPU | BPE 训练是字节频率统计，无张量运算；实测 8 核受限下每个词表约 30 秒 |
+| 资源 | **纯 CPU**（Central Processing Unit，中央处理器），不需要 GPU（Graphics Processing Unit，图形处理器） | BPE 训练是字节频率统计，无张量运算；实测 8 核受限下每个词表约 30 秒 |
 
-**环境**：与预训练共用的 `.venv-train`（Python 3.12.3、tokenizers 0.22.2、transformers 5.14.1；该环境装有 torch 2.13.0+cu130，但本阶段不初始化 CUDA）。`tokenizers` 是 Rust 实现的底层库，`transformers` 在上层封装，本实验直接用 `tokenizers`。
+**环境**：与预训练共用的 `.venv-train`（Python 3.12.3、tokenizers 0.22.2、transformers 5.14.1；该环境装有 torch 2.13.0+cu130，但本阶段不初始化 CUDA——Compute Unified Device Architecture，英伟达 GPU 并行计算平台）。`tokenizers` 是 Rust（一种注重性能与内存安全的系统编程语言）实现的底层库，`transformers` 在上层封装，本实验直接用 `tokenizers`。
 
 共享服务器上跑 CPU 任务时，用 `nice`/`ionice`/`taskset` 降低优先级并限核，避免影响其他用户：
 
@@ -196,7 +196,7 @@ nice -n 10 ionice -c 3 taskset -c 0-7 \
 
 ### 2.2 训练实现
 
-语料按 batch 流式读取（`ParquetFile.iter_batches`，避免 3 GB 字符串一次进内存），边读边喂给 BPE trainer。核心代码（`src/tokenizer/pipeline.py`）：
+语料按 batch（批次）流式读取（`ParquetFile.iter_batches`，避免 3 GB 字符串一次进内存），边读边喂给 BPE trainer（训练器，tokenizers 库组件）。核心代码（`src/tokenizer/pipeline.py`）：
 
 ```python
 from tokenizers import Tokenizer, models, pre_tokenizers, decoders, trainers
@@ -287,11 +287,11 @@ data/manifests/tokenizer-<名称>.json
 | 32K | 32,768 | 33.6M | 56% |
 | Qwen（按 512 算） | 151,669 | 155.3M | 模型都装不下 |
 
-Qwen 真实配置更极端：vocab=151936、hidden=1024、共享 embedding（`tie_word_embeddings=true`），embedding+head 也有 **155.6M**，比本项目整个 30M–60M 模型大好几倍。
+Qwen 真实配置更极端：vocab=151936、hidden=1024、共享 embedding（`tie_word_embeddings=true`，即 embedding 与 LM head 共用同一参数矩阵），embedding+head 也有 **155.6M**，比本项目整个 30M–60M 模型大好几倍。
 
 ### 4.2 对序列长度的影响
 
-把验证集的 tokens/文档外推到 train 语料（约 3.8–3.9 亿 tokens，按字符比例估算），换算成 seq_len=1024 的序列数：
+把验证集的 tokens/文档外推到 train 语料（约 3.8–3.9 亿 tokens，按字符比例估算），换算成 seq_len（sequence length，序列长度）=1024 的序列数：
 
 | Tokenizer | train tokens 估算 | 序列数（1024） | 相对 16K 节省 |
 | --- | ---: | ---: | ---: |
@@ -369,5 +369,56 @@ BPE/WordPiece/Unigram 是核心算法；SentencePiece 是一个实现了 Unigram
 
 **Q7：post-processing 不做，那 BOS/EOS 什么时候加？**
 训练时由数据管线显式添加（阶段 4 会做：输入 `[BOS, t1, t2]`，目标 `[t1, t2, EOS]`）。tokenizer 本身保持"裸编码"，这样 roundtrip 检查不受特殊 token 干扰，也方便复用到不同任务。
+
+## 附录：术语表（全称与中文释义）
+
+按正文出现顺序整理，供查阅：
+
+| 英文 | 全称 | 中文释义 |
+| --- | --- | --- |
+| token | — | 词元：分词得到的最小单元 |
+| tokenizer | — | 分词器：负责文本 ↔ 数字（ID）转换的组件 |
+| vocabulary / vocab_size | — | 词表 / 词表大小 |
+| ID | identifier | 标识编号：token 在词表中的整数下标 |
+| encode / decode | — | 编码（文本 → ID 序列）/ 解码（ID 序列 → 文本） |
+| embedding | — | 词嵌入矩阵：token ID → 稠密向量 |
+| LM head | Language Model Head | 语言模型头：向量 → 各 token 的概率 |
+| Transformer | — | 变换器架构：基于自注意力机制的大模型主干 |
+| checkpoint | — | 模型检查点：训练中保存的参数快照 |
+| OOV | Out-Of-Vocabulary | 词表外：训练时未见过、无法编码的单元 |
+| normalization | — | 归一化：统一大小写 / Unicode 形态的预处理 |
+| pre-tokenization | — | 预分词：按空格/标点切出"词块" |
+| post-processing | — | 后处理：追加特殊 token、套用模板 |
+| ByteLevel | — | 字节级预分词器（tokenizers 库组件） |
+| BPE | Byte Pair Encoding | 字节对编码：迭代合并最高频相邻对的子词算法 |
+| WordPiece | — | 词片算法：按"似然增量最大"合并的子词算法（BERT 用） |
+| Unigram | — | 一元语法剪枝算法：从大词表反向删除词元 |
+| SentencePiece | — | 子词工具库：实现 Unigram/BPE，不依赖空格预切分 |
+| loss | — | 损失：模型预测与目标的差距，训练就是最小化它 |
+| BOS | Beginning Of Sequence | 序列起始标记 |
+| EOS | End Of Sequence | 序列结束标记 |
+| PAD | Padding | 填充标记：让 batch 内序列等长 |
+| UNK | Unknown | 未知标记：词表外字符的统一出口 |
+| batch | — | 批次：一次前向/反向处理的样本组 |
+| attention mask | — | 注意力掩码：标记填充位置、禁止模型关注 |
+| UTF-8 | 8-bit Unicode Transformation Format | Unicode 的变长字符编码（汉字 3 字节） |
+| Unicode | — | 统一码：全球字符的统一编号标准 |
+| ASCII | American Standard Code for Information Interchange | 美国信息交换标准代码（1 字节） |
+| byte-level | — | 字节级：直接在 UTF-8 字节流上做 BPE |
+| hidden_size | — | 隐藏层维度 |
+| tie_word_embeddings | — | 共享词嵌入：embedding 与 LM head 共用参数 |
+| roundtrip | — | 往返检查：`encode` → `decode` 后还原原文 |
+| tokens/character | — | 每字符平均 token 数（压缩率指标） |
+| revision | — | 版本/修订标识：数据、模型版本的唯一记录 |
+| seed | — | 随机种子：固定抽样与训练结果，保证可复现 |
+| split | — | 数据切分：train / validation / test 等子集 |
+| manifest | — | 清单文件：记录来源、许可证、revision、统计 |
+| parquet | Apache Parquet | 列式存储数据格式 |
+| seq_len | sequence length | 序列长度 |
+| trainer | — | 训练器：tokenizers 库中执行算法学习的组件 |
+| min_frequency | — | 最小合并频次：低于该频率的符号对不合并 |
+| CPU / GPU | Central / Graphics Processing Unit | 中央处理器 / 图形处理器 |
+| CUDA | Compute Unified Device Architecture | 英伟达 GPU 并行计算平台 |
+| Rust | — | 一种注重性能与内存安全的系统编程语言 |
 
 **下一篇预告**：有了固定 ID 的 tokenizer，就可以进入**阶段 4 从零预训练**——用 TinyStories 语料训练 5M–20M 的小模型，验证 causal mask、label shift、AdamW、checkpoint 等核心机制。
