@@ -12,11 +12,13 @@ from __future__ import annotations
 from typing import Sequence
 
 # Qwen3-0.6B-Base linear projection shapes (hidden 1024, intermediate 3072).
+# Note: q_proj maps hidden 1024 -> num_heads*head_dim = 16*128 = 2048; k/v map
+# 1024 -> num_kv_heads*head_dim = 8*128 = 1024; o_proj maps 2048 -> 1024.
 QWEN3_0_6B_DIMS: dict[str, tuple[int, int]] = {
-    "q_proj": (1024, 1024),
+    "q_proj": (1024, 2048),
     "k_proj": (1024, 1024),
     "v_proj": (1024, 1024),
-    "o_proj": (1024, 1024),
+    "o_proj": (2048, 1024),
     "gate_proj": (1024, 3072),
     "up_proj": (1024, 3072),
     "down_proj": (3072, 1024),

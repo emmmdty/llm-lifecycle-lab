@@ -15,11 +15,13 @@ from cpt.lora import (
 
 
 def test_lora_trainable_params_qwen3_attn() -> None:
-    per_layer_rank1 = sum(1 * (1024 + 1024) for _ in range(4))
+    per_layer_rank1 = (
+        1 * (1024 + 2048) + 1 * (1024 + 1024) + 1 * (1024 + 1024) + 1 * (2048 + 1024)
+    )
     assert lora_trainable_params(QWEN3_0_6B_DIMS, 28, 1, ("q_proj", "k_proj", "v_proj", "o_proj")) == 28 * per_layer_rank1
     rank2 = lora_trainable_params(QWEN3_0_6B_DIMS, 28, 2, ("q_proj", "k_proj", "v_proj", "o_proj"))
     assert rank2 == 2 * lora_trainable_params(QWEN3_0_6B_DIMS, 28, 1, ("q_proj", "k_proj", "v_proj", "o_proj"))
-    assert 400_000 < rank2 < 500_000
+    assert 500_000 < rank2 < 600_000
 
 
 def test_lora_trainable_params_mlp_shapes() -> None:
@@ -52,7 +54,7 @@ def test_recommend_rank_matches_chinchilla_target() -> None:
         round(chosen["trainable_params"] / 250_000, 2)
     )
     rank1_ratio = [row["ratio_to_target"] for row in decision["candidates"] if row["rank"] == 1][0]
-    assert rank1_ratio == pytest.approx(round(229376 / 250_000, 2))
+    assert rank1_ratio == pytest.approx(round(286720 / 250_000, 2))
 
 
 def test_recommend_rank_scales_with_tokens() -> None:
