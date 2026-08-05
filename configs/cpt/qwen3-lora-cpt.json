@@ -1,0 +1,45 @@
+{
+  "run_name": "qwen3-lora-cpt",
+  "model": {
+    "path": "models/Qwen3-0.6B-Base",
+    "seq_len": 1024,
+    "bf16": true
+  },
+  "lora": {
+    "rank": 2,
+    "alpha": 16,
+    "dropout": 0.05,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"]
+  },
+  "data": {
+    "domain_corpus": "tigerbot-law-cpt",
+    "domain_group_key": "title",
+    "domain_val_frac": 0.05,
+    "domain_split_seed": 42,
+    "general_corpora": ["wikitext", "tinystories"],
+    "data_dir": "data/processed",
+    "tokenizer_dir": "models/Qwen3-0.6B-Base",
+    "stream_tokenizer": "qwen3",
+    "manifest_dir": "data/manifests",
+    "runs_root": "runs",
+    "logs_root": "logs/cpt",
+    "reports_root": "reports"
+  },
+  "train": {
+    "micro_batch_size": 4,
+    "grad_accum_steps": 8,
+    "max_steps": 420,
+    "warmup_steps": 42,
+    "min_lr_ratio": 0.1,
+    "peak_lr": 0.0003,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+    "seed": 42,
+    "val_every": 100,
+    "val_blocks": 100,
+    "val_block_seed": 1234,
+    "ckpt_every": 100,
+    "log_every": 10,
+    "peak_flops": 380000000000000
+  }
+}
