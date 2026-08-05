@@ -92,7 +92,9 @@ def test_shuffle_split_is_reproducible_and_disjoint() -> None:
     t1, v1, e1 = read_split(m1, out1, "train"), read_split(m1, out1, "validation"), read_split(m1, out1, "test")
     t2 = read_split(m2, out2, "train")
     assert t1 == t2
-    assert len(t1) == 30
+    assert len(t1) == 24
+    assert len(v1) == 3
+    assert len(e1) == 3
     train_set = set(t1)
     assert not (set(v1) & train_set)
     assert not (set(e1) & train_set)
@@ -158,9 +160,20 @@ def test_manifest_records_license_revision_and_counts() -> None:
     assert manifest["seed"] == 42
     assert manifest["raw_records"] == 20
     assert manifest["records_after_clean"] == 20
-    assert manifest["partitions"]["train"]["records"] == 15
+    assert manifest["partitions"]["train"]["records"] == 12
     saved = json.loads((Path("/tmp/opencode/govern-test-5/man") / "test-ds.json").read_text(encoding="utf-8"))
     assert saved["dataset"] == "test-ds"
+
+
+def test_zero_test_frac_produces_no_test_partition() -> None:
+    rows = [{"text": f"text row {i}"} for i in range(100)]
+    _write_jsonl(Path("/tmp/opencode/govern-test-6"), "a.jsonl", rows)
+    spec = _make_spec({"fracs": (0.95, 0.05, 0.0)})
+    out = Path("/tmp/opencode/govern-test-6/out")
+    manifest = run_dataset(spec, Path("/tmp/opencode/govern-test-6"), out, Path("/tmp/opencode/govern-test-6/man"))
+    assert manifest["partitions"]["train"]["records"] == 95
+    assert manifest["partitions"]["validation"]["records"] == 5
+    assert manifest["partitions"]["test"]["records"] == 0
 
 
 def test_transforms_behavior() -> None:

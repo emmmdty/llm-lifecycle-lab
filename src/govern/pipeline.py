@@ -163,17 +163,19 @@ def assign_splits(
     if spec.split_strategy == "shuffle":
         all_records = [record for _, record in records]
         rng.shuffle(all_records)
+        if spec.budget is not None:
+            all_records = all_records[: spec.budget]
         total = len(all_records)
         train_end = int(total * spec.fracs[0])
-        val_end = train_end + int(total * spec.fracs[1])
+        if spec.fracs[2] == 0:
+            val_end = total
+        else:
+            val_end = train_end + int(total * spec.fracs[1])
         result = {
             "train": all_records[:train_end],
             "validation": all_records[train_end:val_end],
             "test": all_records[val_end:],
         }
-        if spec.budget is not None:
-            rng.shuffle(result["train"])
-            result["train"] = result["train"][: spec.budget]
         if spec.token_cap is not None:
             result["train"] = _apply_token_cap(spec, result["train"], counter)
         return result
