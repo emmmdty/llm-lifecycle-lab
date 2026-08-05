@@ -289,3 +289,51 @@ reports/20260805-151300.json
 环境补充：`.venv-train` 于本阶段追加安装 `pytest>=8.0`（运行测试用），`uv pip check` 通过；freeze 未变（pytest 非训练依赖）。
 
 阶段 5 可执行条件：本阶段训练框架（prepare/train/generate、checkpoint/resume、记录）已就绪；阶段 5 仅需新增 30M–60M 模型配置与 Wikitext 数据准备。
+
+## 2026-08-05 补充：阶段 5 Wikitext 正式教学预训练完成
+
+阶段 5 在 5090 上完成：Q1 多规模实验（5.14M / 18.1M / 65.4M 各 1 epoch）、Q2 规模决策（正式 5.32M 匹配 D≈20N + 26.8M 欠训练对照）、Wikitext 80M token 正式预训练、登记册 Q3/Q8/Q10/Q12 验证。
+
+### 新增服务器资产
+
+```text
+data/processed/wikitext/tokens/tinystories-bpe-32k/
+  train.bin 354M（92,311,043 tokens int32 流，647,821 docs；BOS/EOS 计入）
+  validation.bin 1.2M（297,414 tokens，2,071 docs）
+  train.json / validation.json（meta：revision=wikitext-103-v1 snapshot 2026-07-29、
+  license=CC BY-NC 4.0、tokenizer=tinystories-bpe-32k、git_commit）
+
+runs/20260805-172251/    Q1 5.14M TinyStories 1 epoch（11969 步，val 1.971）
+runs/20260805-173744/    Q1 65.4M TinyStories 1 epoch（11969 步，val 1.439）
+runs/20260805-181744/    Q3 5.14M TinyStories 3 epoch（35907 步，val 1.769）
+runs/20260805-201228/    Wiki 5.32M 正式（2441 步/80M token，val 4.7394，ppl 114.37）
+runs/20260805-201504/    Wiki 26.76M 欠训练对照（2441 步/80M token，val 3.7685，ppl 43.32）
+runs/20260805-201132/    Wiki 5.32M 基准（150 步）+ resume bit-check（step-75）
+logs/train/（q1-*-1epoch.log、q3-5m-3epoch.log、formal-wiki-*.log、bench-*）
+reports/stage5-analysis.json
+```
+
+阶段 4 既有数据点复用：18.1M TinyStories 1 epoch → val 1.665（ppl 5.28）。
+
+### 阶段 5 关键结果
+
+- **Q1**：`L(N)=13.26·N^(-0.124)`，R²=0.998，α 落在文献区间（Chinchilla ~0.1）；D≈20N 框架适用（详见 docs/06 第 2 节）。
+- **Q2 决策**：正式 5.32M（t/p=15.0，val ppl 114.37）+ 26.8M 对照（t/p=3.0，val ppl 43.32）。26.8M 绝对 loss 更低源于 5× 算力投入；按固定算力最优分配其最优规模约 10M，t/p=3.0 处于数据受限区（详见 docs/06）。
+- **Q3**：5M 1→3 epoch val 1.971→1.769；18M×1 epoch（1.665）仍优于 5M×3 epochs（1.769）→ 固定数据下加参数 > 加 epoch。
+- **Q10 MFU**（5090 FP16 dense 380 TFLOPS 基准）：5M=3.4%、18M≈17%、64M=16.6%、Wiki-5.3M=4.1%、Wiki-26.8M=9.3%。小模型受 kernel 启动开销限制，MFU 低属预期。
+- **Q12 embedding 占比**：TS-5M=42%、TS-18M=48%、TS-64M=13%、Wiki-5.3M=81%、Wiki-26.8M=65%——32k 词表 × 小 hidden 时 embedding 严重挤占参数。
+- **Q8**：全部运行 val-train gap 为正且小（0.017–0.147，无过拟合）；生成多样性（distinct 4-gram ratio）：TinyStories 模型 1.0，Wikitext 模型 0.59–0.63（重复退化，与人工查看样本一致）。
+- 数据事实：32k BPE 将 Wikitext train 编码为 92.31M token（manifest 16k 估算 80M），训练预算仍按 80M（max_steps 2441）。
+
+### 阶段 5 验收证据
+
+- **无 NaN/Inf**：全部运行 dry-run loss finite、metrics 无异常值（每个 run.json 的 dry_run_loss/loss_finite）。
+- **validation loss 下降**：5.32M：10.40→4.74（ppl 114.4，24 个验证点）；26.76M：9.18→3.77（ppl 43.3）；5M/64M/3epoch 同理（metrics.jsonl）。
+- **resume 可用**：Wiki-5.32M 基准从 step-75 checkpoint 恢复（同 resolved config），step 76–91 与原始运行**逐位一致**，后续步骤出现 BF16 最后一位非确定性（~1e-5 相对误差，与阶段 4 现象相同；阶段 4 记录的"逐位一致"应理解为约 5–6 位小数一致）。resume 机制（模型/优化器/采样器/RNG 状态恢复）与损失连续性已验证。
+- **GPU 预算**：全部单卡；单次最长 45.9 分钟（Q3 3-epoch），远低于 8h 默认上限；无需放宽。
+- **显存解释**：参数 BF16 2B/param + 梯度 2B/param + AdamW（fp32 主副本 + 2 个 fp32 动量）12B/param ≈ 16B/param，再加 activation。实测峰值：5.32M=1.5GB、26.76M=2.0GB、64M=3.12GB（16B×N 分别约 85MB/0.43GB/1.05GB，剩余为 activation）。
+- **运行记录**：每次运行 run.json 含 command/config/environment/hardware/revision/seed/summary（loss、tokens/s、step time、峰值显存、avg_mfu），metrics.jsonl 逐 step 记录（含 mfu、val_train_gap）。
+- **Q2/Q1 结论**：docs/06 第 2 节与登记册已回写；docs/01 模型路线已按决策更新。
+- **失败与未完成**：Q7/Q13 未验证（对照混淆/规模不可比，已记录）；Q8 任务级评测留待阶段 12；Q3 只做了 5M 单模型。
+
+阶段 6 可执行条件：预训练框架与规模决策方法已就绪；Qwen3 CPT 直接进入阶段 6 任务。

@@ -64,16 +64,15 @@
 
 ### 3.1 从零预训练模型
 
-自行定义一个约 30M–60M 参数的 Decoder-only Transformer：
+自行定义一个约 30M–60M 参数的 Decoder-only Transformer（**阶段 5 Q2 决策后调整，2026-08-05**：Wikitext-103 约 1 亿 token 与 30M–60M 模型存在数据-规模冲突，tokens/param 仅 1.7–3.4。经 Q1 多规模实验确认 D≈20N 幂律在本项目管线成立后，正式教学预训练改为 **5.32M 模型匹配 D≈20N（80M token 预算下 t/p=15.0）**，另以 **26.8M 模型作为欠训练对照**（t/p=3.0）并量化记录。原 30M–60M 方案废弃原因与全部证据见 docs/06 第 2 节）：
 
 ```yaml
-vocab_size: 16000 或 32000
-hidden_size: 512
-num_hidden_layers: 8 到 12
-num_attention_heads: 8
-num_key_value_heads: 4
-intermediate_size: 1536 或 2048
-max_position_embeddings: 1024 或 2048
+vocab_size: 32768（32K 词表）
+hidden_size: 128（正式 5.32M）/ 512（对照 26.8M）
+num_hidden_layers: 5（正式）/ 3（对照）
+num_attention_heads: 4 / 8（本项目实现未使用 GQA，注意力头数即 key/value 头数）
+intermediate_size: 512 / 2048
+max_position_embeddings: 1024
 dtype: bfloat16
 ```
 
