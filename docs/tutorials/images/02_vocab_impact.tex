@@ -1,0 +1,46 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage[fontset=none]{ctex}
+\setCJKmainfont{Noto Serif CJK SC}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\begin{document}
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  width=0.5\paperwidth,
+  height=0.34\paperwidth,
+  bar width=16pt,
+  enlarge x limits=0.35,
+  symbolic x coords={16K,32K,Qwen},
+  xtick=data,
+  ylabel={embedding+LM head 参数量（百万）},
+  nodes near coords,
+  every node near coord/.append style={font=\small},
+  ymin=0, ymax=175,
+  title={词汇量 vs 参数（hidden=512，不共享权重）},
+  legend style={at={(0.5,0.98)},anchor=north,legend columns=-1},
+  font=\small,
+]
+\addplot[fill=teal!60,draw=teal!80!black] coordinates {(16K,16.8) (32K,33.6) (Qwen,155.3)};
+\end{axis}
+\begin{axis}[
+  ybar,
+  width=0.5\paperwidth,
+  height=0.34\paperwidth,
+  bar width=16pt,
+  enlarge x limits=0.35,
+  symbolic x coords={16K,32K,Qwen},
+  xtick=data,
+  ylabel={验证集平均 tokens/文档},
+  nodes near coords,
+  every node near coord/.append style={font=\small},
+  ymin=150, ymax=230,
+  title={词汇量 vs 序列长度（TinyStories 验证集）},
+  font=\small,
+  xshift=0.5\paperwidth,
+]
+\addplot[fill=orange!60,draw=orange!80!black] coordinates {(16K,201.5) (32K,201.2) (Qwen,197.9)};
+\node[draw,align=center,font=\footnotesize,fill=orange!10] at (axis cs:Qwen,214) {Qwen 官方词汇量 151936，\\训练语料覆盖中英文；\\本实验两个自建词表只\\见英文语料（TinyStories）};
+\end{axis}
+\end{tikzpicture}
+\end{document}
