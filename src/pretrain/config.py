@@ -1,4 +1,4 @@
-"""Stage 4 pretrain: model and training configuration (JSON load/save, validation)."""
+"""Stage 4/5 pretrain: model and training configuration (JSON load/save, validation)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-PARAM_RANGE = (5_000_000, 20_000_000)
+# Stage 5 multi-scale experiment covers 5M/18M/64M plus the Q2-decided
+# Wikitext formal model (<= ~64M); guard is 4M-70M with margin.
+PARAM_RANGE = (4_000_000, 70_000_000)
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,7 @@ class TrainConfig:
     val_block_seed: int
     ckpt_every: int
     log_every: int
+    peak_flops: float = 380e12
 
     def __post_init__(self) -> None:
         if not self.corpus:
@@ -111,6 +114,8 @@ class TrainConfig:
             raise ValueError("ckpt_every must be >= 0")
         if self.log_every < 1:
             raise ValueError("log_every must be >= 1")
+        if self.peak_flops <= 0.0:
+            raise ValueError("peak_flops must be > 0")
 
 
 @dataclass(frozen=True)

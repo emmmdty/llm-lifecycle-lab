@@ -14,6 +14,7 @@ from typing import Any, Sequence
 import torch
 
 from .config import (
+    PARAM_RANGE,
     PretrainConfig,
     assert_param_budget,
     effective_batch_tokens,
@@ -203,8 +204,10 @@ def _dry_run(config: PretrainConfig, paths: dict[str, Path]) -> None:
             {
                 "run_name": config.run_name,
                 "params": params,
-                "param_range": "5M-20M",
-                "in_budget": 5_000_000 <= params <= 20_000_000,
+                "param_range": (
+                    f"{PARAM_RANGE[0] / 1e6:.0f}M-{PARAM_RANGE[1] / 1e6:.0f}M"
+                ),
+                "in_budget": PARAM_RANGE[0] <= params <= PARAM_RANGE[1],
                 "effective_batch_tokens": effective_batch_tokens(tc),
                 "max_steps": tc.max_steps,
                 "budget_tokens": total_budget_tokens(tc),

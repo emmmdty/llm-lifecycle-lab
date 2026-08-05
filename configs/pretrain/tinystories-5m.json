@@ -1,0 +1,41 @@
+{
+  "run_name": "tinystories-5m",
+  "model": {
+    "vocab_size": 16384,
+    "hidden_size": 128,
+    "num_hidden_layers": 15,
+    "num_attention_heads": 4,
+    "intermediate_size": 512,
+    "max_position_embeddings": 512,
+    "dropout": 0.0,
+    "activation": "gelu",
+    "tie_word_embeddings": true
+  },
+  "train": {
+    "corpus": "tinystories",
+    "train_split": "train",
+    "validation_split": "validation",
+    "data_dir": "data/processed",
+    "tokenizer_dir": "artifacts/tokenizers/tinystories-bpe-16k",
+    "manifest_dir": "data/manifests",
+    "runs_root": "runs",
+    "logs_root": "logs/train",
+    "reports_root": "reports",
+    "seq_len": 512,
+    "micro_batch_size": 8,
+    "grad_accum_steps": 8,
+    "max_steps": 11969,
+    "warmup_steps": 500,
+    "min_lr_ratio": 0.1,
+    "peak_lr": 0.0003,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+    "seed": 42,
+    "bf16": true,
+    "val_every": 500,
+    "val_blocks": 100,
+    "val_block_seed": 1234,
+    "ckpt_every": 1000,
+    "log_every": 10
+  }
+}

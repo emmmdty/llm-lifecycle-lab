@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from tokenizers import Tokenizer
 
 from .config import PretrainConfig, effective_batch_tokens
+from .analyze import compute_mfu
 from .data import BlockSampler, open_stream_memmap, validation_offsets
 from .model import DecoderOnlyCausalLM, generate
 from .schedule import WarmupCosineSchedule
@@ -198,12 +199,15 @@ class Trainer:
                 "grad_norm": float(grad_norm),
                 "tokens_s": effective_batch_tokens(tc) / step_time,
                 "step_time_s": step_time,
+                "mfu": self._mfu_for(effective_batch_tokens(tc), step_time),
                 "val_loss": None,
                 "val_ppl": None,
+                "val_train_gap": None,
                 "peak_mem_gb": None,
             }
             if tc.val_every and self.global_step % tc.val_every == 0:
                 entry.update(self.validate())
+                entry["val_train_gap"] = entry["val_loss"] - entry["train_loss"]
             if self.device.type == "cuda" and (
                 (tc.val_every and self.global_step % tc.val_every == 0)
                 or (tc.ckpt_every and self.global_step % tc.ckpt_every == 0)
@@ -225,6 +229,13 @@ class Trainer:
         self._generate_samples("final", tc)
         self.summary = self._build_summary(elapsed)
         self._log_summary()
+
+    def _mfu_for(self, tokens: int, seconds: float) -> float | None:
+        """MFU of a train step: 6 x params x tokens per step vs peak FLOPs."""
+        if self.device.type != "cuda":
+            return None
+        flops = 6.0 * self._param_count * tokens
+        return compute_mfu(flops, self.config.train.peak_flops, seconds)
 
     def validate(self) -> dict[str, float | int]:
         tc = self.config.train
@@ -388,10 +399,14 @@ class Trainer:
             "elapsed_s": elapsed,
             "avg_tokens_s": tokens / elapsed if elapsed > 0 else None,
             "avg_step_time_s": elapsed / self.global_step if self.global_step else None,
+            "avg_mfu": self._mfu_for(tokens, elapsed),
             "final_train_loss": self.metrics[-1]["train_loss"] if self.metrics else None,
             "first_train_loss": self.metrics[0]["train_loss"] if self.metrics else None,
             "best_val": best_val,
             "last_val": last_val,
+            "last_val_train_gap": (
+                last_val["val_loss"] - last_val["train_loss"] if last_val else None
+            ),
             "peak_mem_gb": max(
                 (m["peak_mem_gb"] for m in self.metrics if m.get("peak_mem_gb") is not None),
                 default=None,
