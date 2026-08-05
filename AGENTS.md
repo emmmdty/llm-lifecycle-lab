@@ -174,6 +174,15 @@ uv pip freeze
 
 无证据不得标记完成。
 
+## 教程规则
+
+- 每个阶段验收通过后，必须在 `docs/tutorials/` 下撰写该阶段阶段性教程（中文编号命名，每阶段一篇）；
+- 简单流程用 Mermaid，复杂框图用 TikZ 绘制并导出 PNG 插入（`.tex` 源文件与 PNG 一并提交）；
+- 教程不包含个人网络因素（cpolar 等）、不暴露个人服务器信息、不写本地↔服务器同步说明；
+- 环境内容必须写清 Python / uv / CUDA / torch 版本与隔离原因；
+- 每篇教程必须记录该阶段遇到的真实问题与解决过程；
+- 写作规范详见 `docs/tutorials/README.md`。
+
 ## Code Review Rules
 
 - 不接受将 `data/`、`models/`、`artifacts/`、`runs/`、`logs/`、`.venv*` 或大型权重/数据文件提交到 Git。

@@ -1,0 +1,68 @@
+% LLM Lifecycle Lab 教程：四个隔离 Python 环境框图
+\documentclass[border=10pt]{standalone}
+\usepackage[fontset=none]{ctex}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setmainfont{Noto Sans CJK SC}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+\definecolor{cblue}{HTML}{2563EB}
+\definecolor{cgreen}{HTML}{059669}
+\definecolor{cpurple}{HTML}{7C3AED}
+\definecolor{corange}{HTML}{D97706}
+\definecolor{cred}{HTML}{DC2626}
+\definecolor{bgblue}{HTML}{EFF6FF}
+\definecolor{bggreen}{HTML}{ECFDF5}
+\definecolor{bgpurple}{HTML}{F5F3FF}
+\definecolor{bgorange}{HTML}{FFF7ED}
+\definecolor{bgred}{HTML}{FEF2F2}
+
+\tikzset{
+  venv/.style 2 args={draw=#1!70, fill=#2, rounded corners=6pt, inner sep=8pt, minimum width=130pt},
+  pkg/.style={draw=#1!50, fill=white, rounded corners=2pt, inner sep=3pt, font=\footnotesize},
+}
+
+\begin{document}
+\begin{tikzpicture}[node distance=14pt, >=Stealth]
+
+\node[venv={cblue}{bgblue}, align=center] (train) {
+  \textbf{\texttt{.venv-train}}\\[3pt]
+  {\footnotesize 训练环境（Python 3.12）}\\
+  \tikz{\node[pkg=cblue, fill=bgblue]{\texttt{torch 2.13.0+cu130}};\ }
+  \tikz{\node[pkg=cblue, fill=bgblue]{\texttt{transformers}};\ }\\
+  \tikz{\node[pkg=cblue, fill=bgblue]{\texttt{peft / trl}};\ }
+  \tikz{\node[pkg=cblue, fill=bgblue]{\texttt{modelscope}};\ }\\
+  {\footnotesize CUDA runtime 13.0}
+};
+
+\node[venv={cgreen}{bggreen}, align=center, right=16pt of train] (eval) {
+  \textbf{\texttt{.venv-eval}}\\[3pt]
+  {\footnotesize 评测环境}\\
+  \tikz{\node[pkg=cgreen, fill=bggreen]{\texttt{lm-eval 0.4.12}};\ }\\
+  \tikz{\node[pkg=cgreen, fill=bggreen]{\texttt{torch 2.13.0+cu130}};\ }
+};
+
+\node[venv={cpurple}{bgpurple}, align=center, right=16pt of eval] (quant) {
+  \textbf{\texttt{.venv-quant}}\\[3pt]
+  {\footnotesize 量化环境}\\
+  \tikz{\node[pkg=cpurple, fill=bgpurple]{\texttt{llmcompressor 0.12.0}};\ }\\
+  \tikz{\node[pkg=cpurple, fill=bgpurple]{\texttt{torch 2.12.0+cu130}};\ }
+};
+
+\node[venv={corange}{bgorange}, align=center, right=16pt of quant] (serve) {
+  \textbf{\texttt{.venv-serve}}\\[3pt]
+  {\footnotesize 部署环境}\\
+  \tikz{\node[pkg=corange, fill=bgorange]{\texttt{vllm 0.26.0}};\ }\\
+  \tikz{\node[pkg=corange, fill=bgorange]{\texttt{torch 2.11.0+cu130}};\ }
+};
+
+\node[draw=cred!60, fill=bgred, rounded corners=6pt, align=center, below=22pt of eval.south, xshift=0pt, text width=430pt, inner sep=8pt] (warn) {
+  {\footnotesize\textbf{为什么隔离？} 禁止把 LLM Compressor、lm-eval 的 vLLM extra 和 vLLM 强装进同一环境，\\[2pt]
+  彼此依赖冲突且互相污染版本；全部由 \texttt{uv} 统一创建与锁版本（\texttt{uv pip check} / \texttt{uv pip freeze}）}
+};
+
+\draw[cred, ->, thick] (warn.north) -- node[right, font=\footnotesize]{约束} (eval.south);
+
+\end{tikzpicture}
+\end{document}
