@@ -589,7 +589,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cmp.set_defaults(func=cmd_compare)
 
     args = parser.parse_args(argv)
-    if args.command not in ("train",) or not args.dry_run:
+    if args.command != "train":
         _setup_logging(None)
     return args.func(args)
 
