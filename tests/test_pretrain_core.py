@@ -113,7 +113,8 @@ def test_committed_config_loads_and_is_in_budget() -> None:
     assert config.train.seq_len <= config.model.max_position_embeddings
     assert config.model.hidden_size % config.model.num_attention_heads == 0
     assert effective_batch_tokens(config.train) == 512 * 8 * 8
-    assert total_budget_tokens(config.train) == 512 * 8 * 8 * 4700
+    assert total_budget_tokens(config.train) == effective_batch_tokens(config.train) * config.train.max_steps
+    assert config.train.max_steps * effective_batch_tokens(config.train) >= 392_186_497
 
 
 def test_param_estimate_formula() -> None:

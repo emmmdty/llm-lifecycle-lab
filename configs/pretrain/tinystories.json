@@ -24,18 +24,18 @@
     "seq_len": 512,
     "micro_batch_size": 8,
     "grad_accum_steps": 8,
-    "max_steps": 4700,
-    "warmup_steps": 200,
+    "max_steps": 11967,
+    "warmup_steps": 500,
     "min_lr_ratio": 0.1,
     "peak_lr": 0.0003,
     "weight_decay": 0.1,
     "grad_clip": 1.0,
     "seed": 42,
     "bf16": true,
-    "val_every": 250,
+    "val_every": 500,
     "val_blocks": 100,
     "val_block_seed": 1234,
-    "ckpt_every": 500,
+    "ckpt_every": 1000,
     "log_every": 10
   }
 }
