@@ -31,17 +31,17 @@
   "train": {
     "micro_batch_size": 32,
     "grad_accum_steps": 4,
-    "max_steps": 600,
-    "warmup_steps": 60,
+    "max_steps": 129,
+    "warmup_steps": 13,
     "min_lr_ratio": 0.1,
     "peak_lr": 0.0003,
     "weight_decay": 0.1,
     "grad_clip": 1.0,
     "seed": 42,
-    "val_every": 100,
+    "val_every": 43,
     "val_blocks": 100,
     "val_block_seed": 1234,
-    "ckpt_every": 100,
+    "ckpt_every": 43,
     "log_every": 10,
     "peak_flops": 380000000000000
   }
