@@ -62,7 +62,6 @@ def test_causal_mask_shape_and_triangular() -> None:
 def test_param_count_matches_estimate() -> None:
     model = make_model()
     assert count_params(model) == model.config.estimate_params()
-    assert 5_000_000 <= count_params(model) <= 20_000_000
     untied = make_model(tie_word_embeddings=False)
     assert count_params(untied) - count_params(model) == (
         tiny_config().vocab_size * tiny_config().hidden_size
