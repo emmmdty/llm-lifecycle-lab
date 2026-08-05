@@ -273,7 +273,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         config = replace(config, train=replace(config.train, val_every=args.val_every))
     if args.ckpt_every is not None:
         config = replace(config, train=replace(config.train, ckpt_every=args.ckpt_every))
-    if not args.bf16:
+    if args.no_bf16:
         config = replace(config, train=replace(config.train, bf16=False))
 
     resume_checkpoint: Path | None = None
