@@ -28,8 +28,8 @@
   "train": {
     "micro_batch_size": 4,
     "grad_accum_steps": 8,
-    "max_steps": 420,
-    "warmup_steps": 42,
+    "max_steps": 360,
+    "warmup_steps": 36,
     "min_lr_ratio": 0.1,
     "peak_lr": 0.0003,
     "weight_decay": 0.1,
