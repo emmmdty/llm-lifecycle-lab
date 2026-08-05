@@ -1,0 +1,48 @@
+{
+  "run_name": "small-full-sft",
+  "model": {
+    "kind": "tiny",
+    "chat_template": "tiny",
+    "seq_len": 512,
+    "bf16": true,
+    "init_checkpoint": "runs/20260805-151300/checkpoints/latest.pt",
+    "vocab_size": 16384,
+    "hidden_size": 512,
+    "num_hidden_layers": 3,
+    "num_attention_heads": 8,
+    "intermediate_size": 2048,
+    "max_position_embeddings": 512,
+    "tie_word_embeddings": true
+  },
+  "data": {
+    "corpus": "alpaca-sft-en",
+    "source_corpus": "alpaca-cleaned",
+    "governed_splits": ["train", "validation"],
+    "val_frac": 0.05,
+    "split_seed": 42,
+    "data_dir": "data/processed",
+    "tokenizer_dir": "artifacts/tokenizers/tinystories-bpe-16k",
+    "stream_tokenizer": "tinystories-bpe-16k",
+    "manifest_dir": "data/manifests",
+    "runs_root": "runs",
+    "logs_root": "logs/sft",
+    "reports_root": "reports"
+  },
+  "train": {
+    "micro_batch_size": 32,
+    "grad_accum_steps": 4,
+    "max_steps": 600,
+    "warmup_steps": 60,
+    "min_lr_ratio": 0.1,
+    "peak_lr": 0.0003,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+    "seed": 42,
+    "val_every": 100,
+    "val_blocks": 100,
+    "val_block_seed": 1234,
+    "ckpt_every": 100,
+    "log_every": 10,
+    "peak_flops": 380000000000000
+  }
+}

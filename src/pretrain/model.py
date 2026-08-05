@@ -129,6 +129,10 @@ class DecoderOnlyCausalLM(nn.Module):
         x = self.ln_f(x)
         return self.lm_head(x)
 
+    def get_output_embeddings(self) -> nn.Linear:
+        """HF-compatible accessor used by eval code (vocab size lookup)."""
+        return self.lm_head
+
 
 @torch.no_grad()
 def generate(

@@ -90,6 +90,23 @@ DATASETS: dict[str, DatasetSpec] = {
         fracs=(0.8, 0.1, 0.1),
         notes=("非商用许可，仅用于本项目学习。总预算 18K：train 14.4K / val 1.8K / test 1.8K。",),
     ),
+    "alpaca-cleaned": DatasetSpec(
+        name="alpaca-cleaned",
+        license="cc-by-4.0",
+        revision="AI-ModelScope/alpaca-cleaned snapshot 2026-08-06",
+        upstream="AI-ModelScope/alpaca-cleaned",
+        reader="json_array",
+        transform="alpaca",
+        split_strategy="shuffle",
+        pattern="alpaca-cleaned/alpaca_data_cleaned.json",
+        budget=15_000,
+        seed=42,
+        fracs=(0.8, 0.1, 0.1),
+        notes=(
+            "英文指令数据（yahma/alpaca-cleaned 镜像），用于小模型 Full-SFT 的语言匹配数据。",
+            "阶段 2 治理为 shuffle 切分；阶段 7 SFT 准备时按 prompt 分组重切（train+val 参与）。",
+        ),
+    ),
     "gsm8k": DatasetSpec(
         name="gsm8k",
         license="MIT",

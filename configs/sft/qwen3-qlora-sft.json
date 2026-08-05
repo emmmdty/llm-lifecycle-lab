@@ -1,0 +1,48 @@
+{
+  "run_name": "qwen3-qlora-sft",
+  "model": {
+    "kind": "qwen3",
+    "chat_template": "qwen3",
+    "seq_len": 1024,
+    "bf16": true,
+    "path": "models/Qwen3-0.6B-Base"
+  },
+  "lora": {
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.05,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"]
+  },
+  "qlora": true,
+  "data": {
+    "corpus": "alpaca-sft-zh",
+    "source_corpus": "alpaca-gpt4-zh",
+    "governed_splits": ["train", "validation"],
+    "val_frac": 0.05,
+    "split_seed": 42,
+    "data_dir": "data/processed",
+    "tokenizer_dir": "models/Qwen3-0.6B-Base",
+    "stream_tokenizer": "qwen3",
+    "manifest_dir": "data/manifests",
+    "runs_root": "runs",
+    "logs_root": "logs/sft",
+    "reports_root": "reports"
+  },
+  "train": {
+    "micro_batch_size": 4,
+    "grad_accum_steps": 8,
+    "max_steps": 600,
+    "warmup_steps": 60,
+    "min_lr_ratio": 0.1,
+    "peak_lr": 0.0003,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+    "seed": 42,
+    "val_every": 100,
+    "val_blocks": 100,
+    "val_block_seed": 1234,
+    "ckpt_every": 100,
+    "log_every": 10,
+    "peak_flops": 380000000000000
+  }
+}
