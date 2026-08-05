@@ -534,11 +534,11 @@ class SftTrainer:
         if payload.get("stream") != current_stream:
             raise ValueError(f"{checkpoint}: token stream mismatch with checkpoint")
         missing, unexpected = self.model.load_state_dict(
-            payload["model_state"], strict=not self.config.is_peft
+            payload["model_state"], strict=False
         )
-        if self.config.is_peft and unexpected:
-            raise ValueError(f"{checkpoint}: unexpected keys in adapter state: {unexpected}")
-        if missing:
+        if unexpected:
+            raise ValueError(f"{checkpoint}: unexpected keys in model state: {unexpected}")
+        if missing and not self.config.is_peft:
             raise ValueError(f"{checkpoint}: missing keys in model state: {missing}")
         self.optimizer.load_state_dict(payload["optimizer_state"])
         self.sampler.set_state(payload["sampler_state"])
