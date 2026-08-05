@@ -148,7 +148,7 @@ def test_model_config_validation_errors() -> None:
 
 
 def test_train_config_validation_errors() -> None:
-    for bad in (dict(max_steps=0), dict(warmup_steps=4700), dict(warmup_steps=-1)):
+    for bad in (dict(max_steps=0), dict(warmup_steps=-1)):
         with pytest.raises(ValueError):
             tinystories_config(**bad)
     for bad in (

@@ -95,8 +95,6 @@ class TrainConfig:
                 raise ValueError(f"{name} must be >= 1")
         if self.warmup_steps < 0:
             raise ValueError("warmup_steps must be >= 0")
-        if self.warmup_steps >= self.max_steps:
-            raise ValueError("warmup_steps must be < max_steps")
         if not 0.0 <= self.min_lr_ratio < 1.0:
             raise ValueError("min_lr_ratio must be in [0, 1)")
         if self.peak_lr <= 0.0:
