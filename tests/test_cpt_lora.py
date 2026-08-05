@@ -30,7 +30,7 @@ def test_lora_trainable_params_mlp_shapes() -> None:
     )
     expected = 1 * (1024 + 3072) + 1 * (1024 + 3072) + 1 * (3072 + 1024)
     assert mlp_rank1 == expected
-    assert lora_trainable_params(QWEN3_0_6B_DIMS, 28, 2, ("q_proj",)) == 28 * 2 * (1024 + 1024)
+    assert lora_trainable_params(QWEN3_0_6B_DIMS, 28, 2, ("q_proj",)) == 28 * 2 * (1024 + 2048)
 
 
 def test_lora_validation_errors() -> None:
