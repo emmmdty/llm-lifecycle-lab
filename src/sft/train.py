@@ -580,8 +580,9 @@ class SftTrainer:
             f"tokens/s {entry['tokens_s']:.0f}",
             f"step {entry['step_time_s']:.2f}s",
         ]
-        for name, val in entry.get("val", {}).items():
-            parts.append(f"{name} {val['val_loss']:.4f} (ppl {val['val_ppl']:.2f})")
+        val = entry.get("val")
+        if isinstance(val, dict) and "val_loss" in val:
+            parts.append(f"val {val['val_loss']:.4f} (ppl {val['val_ppl']:.2f})")
         if entry.get("peak_mem_gb") is not None:
             parts.append(f"peak {entry['peak_mem_gb']:.2f}GB")
         log.info(" ".join(parts))
@@ -590,9 +591,9 @@ class SftTrainer:
         tc = self.config.train
         batch_tokens = effective_batch_tokens(tc, self.config.model.seq_len)
         tokens = self.global_step * batch_tokens
-        val_entries = [m for m in self.metrics if m.get("val")]
+        val_entries = [m for m in self.metrics if isinstance(m.get("val"), dict) and "val_loss" in m["val"]]
         last_val = val_entries[-1]["val"] if val_entries else None
-        best = min((m for m in self.metrics if m.get("val")), key=lambda m: m["val"]["val_loss"]) if val_entries else None
+        best = min(val_entries, key=lambda m: m["val"]["val_loss"]) if val_entries else None
         return {
             "run_id": self.run_dir.name,
             "git_commit": None,
@@ -637,5 +638,9 @@ class SftTrainer:
 
 
 def best_step(metrics: list[dict[str, Any]]) -> int | None:
-    best = min((m for m in metrics if m.get("val")), key=lambda m: m["val"]["val_loss"], default=None)
+    best = min(
+        (m for m in metrics if isinstance(m.get("val"), dict) and "val_loss" in m["val"]),
+        key=lambda m: m["val"]["val_loss"],
+        default=None,
+    )
     return best["global_step"] if best else None
