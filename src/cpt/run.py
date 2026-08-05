@@ -24,6 +24,7 @@ from .eval import (
     summarize_comparison,
 )
 from .lora import (
+    QWEN3_0_6B_DIMS,
     QWEN3_0_6B_LAYERS,
     QWEN3_0_6B_TOTAL_PARAMS,
     estimate_cpt_flops,
@@ -146,7 +147,10 @@ def _sizing_report(config: CptConfig, domain_tokens: int | None) -> dict[str, An
         "max_steps": train.max_steps,
         "budget_tokens": total_budget_tokens(train, config.model.seq_len),
         "lora_trainable_params": lora_trainable_params(
-            config.lora.target_modules, QWEN3_0_6B_LAYERS, config.lora.rank
+            QWEN3_0_6B_DIMS,
+            QWEN3_0_6B_LAYERS,
+            config.lora.rank,
+            config.lora.target_modules,
         ),
         "flops_estimate": None,
         "wall_time_estimate_s": None,
