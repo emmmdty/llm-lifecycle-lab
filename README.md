@@ -46,6 +46,7 @@ SSH: gpu-4090
 - [docs/03_COMPLETE_TUTORIAL.md](docs/03_COMPLETE_TUTORIAL.md)：LLM 生命周期教程说明。
 - [docs/04_ENV_DATA_MODELS.md](docs/04_ENV_DATA_MODELS.md)：环境、数据和模型规范。
 - [docs/05_GPU_AND_LOCAL_SERVER_WORKFLOW.md](docs/05_GPU_AND_LOCAL_SERVER_WORKFLOW.md)：本地与 GPU 服务器工作流。
+- [docs/06_OPEN_QUESTIONS_AND_SCALING.md](docs/06_OPEN_QUESTIONS_AND_SCALING.md)：模型规模、数据规模与效果评价的开放问题登记册（跨阶段验证计划）。
 - [AGENTS.md](AGENTS.md)：Codex 和其他 coding agent 的仓库级执行规则。
 
 ## 开发约束

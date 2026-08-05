@@ -15,8 +15,11 @@
 5. `docs/03_COMPLETE_TUTORIAL.md`
 6. `docs/04_ENV_DATA_MODELS.md`
 7. `docs/05_GPU_AND_LOCAL_SERVER_WORKFLOW.md`
+8. `docs/06_OPEN_QUESTIONS_AND_SCALING.md`
 
 然后明确当前只执行哪一个阶段。
+
+跨阶段需求只记录，不顺手实现。与模型规模、数据规模匹配、训练效果评价相关的开放问题登记在 `docs/06_OPEN_QUESTIONS_AND_SCALING.md`，对应阶段执行时逐项验证并把结论回写。
 
 ## 每次任务先输出
 

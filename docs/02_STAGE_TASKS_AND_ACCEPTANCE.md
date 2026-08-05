@@ -170,6 +170,8 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 训练约 30M–60M 模型：
 
+- 先决策 Q2（docs/06）：Wikitext-103 约 1.03 亿 token 与 30M–60M 模型存在数据-规模冲突（tokens/param 仅 1.7–3.4，严重欠训练）。选项：降模型规模匹配 D≈20N、维持规模并量化记录欠训练、或扩语料（违反小语料原则，不推荐）。决策理由与证据必须写入阶段 5 报告并回写 docs/06；
+- 验证 docs/06 登记册 Q1/Q3/Q7/Q8/Q10（多规模或多 epoch 对比实验、序列长度/位置编码、评价升级、MFU 纳入运行记录）；
 - sequence length 1024；
 - 训练 token 上限 3,000万–8,000万；
 - BF16；
@@ -183,7 +185,9 @@ Codex 不得在 smoke test 后自动开始正式训练。
 - validation loss 下降；
 - resume 可用；
 - 训练耗时不超过 8 小时；
-- 能解释参数、activation、gradient 和 optimizer 显存。
+- 能解释参数、activation、gradient 和 optimizer 显存；
+- Q2 决策已记录（docs/06 回写）；
+- 至少一项缩放/收益实验（多规模或多 epoch）给出数据结论。
 
 ---
 
