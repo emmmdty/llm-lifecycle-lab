@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import itertools
 import logging
 import os
 import subprocess
@@ -111,18 +112,39 @@ def corpus_stats(
     }
 
 
+def _read_reference_config(directory: Path) -> dict | None:
+    """Model config facts (vocab_size, hidden_size, embedding tying) for impact math."""
+    path = directory / "config.json"
+    if not path.is_file():
+        return None
+    with open(path, encoding="utf-8") as fh:
+        config = json.load(fh)
+    return {
+        "vocab_size": config.get("vocab_size"),
+        "hidden_size": config.get("hidden_size"),
+        "tie_word_embeddings": config.get("tie_word_embeddings"),
+    }
+
+
 def cmd_analyze(args: argparse.Namespace) -> int:
     custom: list[tuple[TokenizerLike, dict]] = []
     for raw in args.tokenizer_dirs:
         custom.append(load_tokenizer_dir(Path(raw)))
 
     reference: TokenizerLike | None = None
+    reference_config: dict | None = None
     if args.reference:
         from transformers import AutoTokenizer
 
         ref = AutoTokenizer.from_pretrained(str(args.reference), trust_remote_code=True)
         reference = from_transformers(ref, "qwen3-0.6b-base")
-        log.info("reference loaded: %s (vocab %d)", reference.name, reference.vocab_size)
+        reference_config = _read_reference_config(Path(args.reference))
+        log.info(
+            "reference loaded: %s (len=%d config=%s)",
+            reference.name,
+            reference.vocab_size,
+            reference_config,
+        )
 
     processed_root = Path(args.processed_root)
     manifest_dir = Path(args.manifest_dir)
@@ -158,14 +180,25 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                 "validation",
                 max_docs=args.max_docs,
             )
+            sample = list(
+                itertools.islice(
+                    iter_corpus_texts(processed_root, corpus, "validation"),
+                    args.roundtrip_docs,
+                )
+            )
+            entry["corpus_validation_roundtrip"] = roundtrip_check(tokenizer, sample)
             log.info(
-                "%s validation: %s", tokenizer.name, json.dumps(entry["corpus_validation"])
+                "%s validation: %s roundtrip=%s",
+                tokenizer.name,
+                json.dumps(entry["corpus_validation"]),
+                entry["corpus_validation_roundtrip"]["ok"],
             )
         report["tokenizers"][tokenizer.name] = entry
 
     if reference is not None:
         report["reference"] = {
             "vocab_size": reference.vocab_size,
+            "config": reference_config,
             "probes_tokens_per_char": analyze_probes(reference),
             "probes_roundtrip": roundtrip_check(reference, probe_texts),
         }
@@ -241,11 +274,29 @@ def _build_impact(report: dict, hidden_size: int, seq_len: int) -> dict:
         "seq_len": seq_len,
         "tie_embeddings": False,
         "embedding_lm_head_params": params,
+        "reference_own_config": _reference_own_config(report),
         "sequence_stats": sequence_stats,
         "estimate_method": (
             "train tokens estimated from validation tokens scaled by train/validation "
             "character ratio from the corpus manifest; sequences = ceil(tokens / seq_len)"
         ),
+    }
+
+
+def _reference_own_config(report: dict) -> dict | None:
+    reference = report.get("reference") or {}
+    config = reference.get("config") or {}
+    vocab_size = config.get("vocab_size")
+    hidden_size = config.get("hidden_size")
+    if not vocab_size or not hidden_size:
+        return None
+    tied = bool(config.get("tie_word_embeddings"))
+    layers = 1 if tied else 2
+    return {
+        "vocab_size": vocab_size,
+        "hidden_size": hidden_size,
+        "tie_word_embeddings": tied,
+        "embedding_lm_head_params": layers * vocab_size * hidden_size,
     }
 
 
@@ -272,6 +323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     analyze.add_argument("--seq-len", type=int, default=1024)
     analyze.add_argument("--corpus-stats", action="store_true", help="token-count the validation split")
     analyze.add_argument("--max-docs", type=int, default=None, help="cap corpus documents")
+    analyze.add_argument("--roundtrip-docs", type=int, default=500, help="docs to roundtrip-check")
     analyze.add_argument("--log", default=None)
     analyze.set_defaults(func=cmd_analyze)
 

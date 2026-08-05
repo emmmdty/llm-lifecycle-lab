@@ -268,3 +268,19 @@ def test_build_meta_and_write_manifest(tmp_path: Path) -> None:
     path = write_manifest(tmp_path, meta)
     assert path.name == "tokenizer-tiny-bpe.json"
     assert json.loads(path.read_text(encoding="utf-8"))["corpus"]["revision"] == "r9"
+
+
+def test_read_reference_config(tmp_path: Path) -> None:
+    from tokenizer.run import _read_reference_config
+
+    directory = tmp_path / "ref"
+    directory.mkdir()
+    (directory / "config.json").write_text(
+        json.dumps(
+            {"vocab_size": 151936, "hidden_size": 1024, "tie_word_embeddings": True}
+        ),
+        encoding="utf-8",
+    )
+    config = _read_reference_config(directory)
+    assert config == {"vocab_size": 151936, "hidden_size": 1024, "tie_word_embeddings": True}
+    assert _read_reference_config(tmp_path / "missing") is None
