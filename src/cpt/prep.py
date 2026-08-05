@@ -26,7 +26,7 @@ from typing import Any, Iterable, Iterator, Sequence
 
 import pyarrow.parquet as pq
 
-from pretrain.data import encode_doc, write_stream, write_stream_meta
+from pretrain.data import write_stream, write_stream_meta
 from pretrain.record import gather_environment, git_head
 
 log = logging.getLogger("cpt.prep")
@@ -113,6 +113,14 @@ def dedupe_records(
     return kept, removed
 
 
+def encode_ids(tokenizer: Any, text: str) -> list[int]:
+    """Tokenize without special tokens; works with HF AutoTokenizer (list) and tokenizers.Tokenizer (Encoding)."""
+    encoded = tokenizer.encode(text, add_special_tokens=False)
+    if hasattr(encoded, "ids"):
+        return list(encoded.ids)
+    return list(encoded)
+
+
 def count_tokens(
     records: Sequence[dict[str, Any]], tokenizer: Any
 ) -> tuple[int, int]:
@@ -120,8 +128,7 @@ def count_tokens(
     docs = 0
     total = 0
     for record in records:
-        ids = tokenizer.encode(record["text"], add_special_tokens=False).ids
-        total += len(ids) + 2
+        total += len(encode_ids(tokenizer, record["text"])) + 2
         docs += 1
     return total, docs
 
@@ -140,7 +147,7 @@ def encode_and_write_stream(
 
     def docs() -> Iterator[list[int]]:
         for record in records:
-            yield encode_doc(tokenizer, record["text"], eos_id, eos_id)
+            yield [eos_id, *encode_ids(tokenizer, record["text"]), eos_id]
 
     tokens = write_stream(_flatten(docs()), stream_path)
     return len(records), tokens

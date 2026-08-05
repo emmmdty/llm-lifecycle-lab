@@ -431,6 +431,7 @@ class CptTrainer:
                 device=self.device,
             )
             text = texts[0]
+            encoded = self.tokenizer.encode(text, add_special_tokens=False)
             entry = {
                 "phase": phase,
                 "global_step": self.global_step,
@@ -438,7 +439,7 @@ class CptTrainer:
                 "greedy": greedy,
                 "prompt": prompt,
                 "generated": text,
-                "tokens": len(self.tokenizer.encode(text, add_special_tokens=False).ids),
+                "tokens": len(encoded) if not hasattr(encoded, "ids") else len(encoded.ids),
                 "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             }
             entries.append(entry)
