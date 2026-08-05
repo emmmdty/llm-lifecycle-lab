@@ -1,0 +1,29 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage[fontset=none]{ctex}
+\setCJKmainfont{Noto Serif CJK SC}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\begin{document}
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=1.5pt, minimum height=9mm, inner sep=2pt, font=\ttfamily\small},
+  lbl/.style={font=\small, align=right},
+]
+\node[font=\bfseries\small, anchor=north] at (5.2,1.15) {同一个英文单词 tokenization 的三种切分粒度};
+
+\node[lbl] at (-3.6,0) {词级\\词表约 10 万};
+\node[box, fill=blue!20, draw=blue!60!black, anchor=west] (w1) at (-1.4,0) {tokenization};
+\node[font=\small, anchor=west, xshift=6pt] at (w1.east) {1 个 token};
+
+\node[lbl] at (-3.6,-1.6) {子词级\\词表约 3 万};
+\node[box, fill=orange!30, draw=orange!70!black, anchor=west] (s1) at (-1.4,-1.6) {token};
+\node[box, fill=orange!30, draw=orange!70!black, anchor=west, xshift=3pt] (s2) at (s1.east) {ization};
+\node[font=\small, anchor=west, xshift=6pt] at (s2.east) {2 个 token};
+
+\node[lbl] at (-3.6,-3.2) {字符级\\词表约 100};
+\node[box, fill=teal!25, draw=teal!60!black, anchor=west] (c0) at (-1.4,-3.2) {t};
+\foreach \letter/\prev in {o/c0, k/o, e/k, n/e, i/n, z/i, a/z, t/a, i/t, o/i, n/o} {
+  \node[box, fill=teal!25, draw=teal!60!black, anchor=west, xshift=3pt] (\letter) at (\prev.east) {\letter};
+}
+\node[font=\small, anchor=west, xshift=6pt] at (n.east) {12 个 token};
+\end{tikzpicture}
+\end{document}
