@@ -141,7 +141,12 @@ def generate_conversation(
 
 
 def load_base_model(config: SftConfig, device: torch.device, pad_id: int = 2):
-    """Load the trainable model for the experiment (tiny full / qwen3 lora / qlora)."""
+    """Load the trainable model for the experiment (tiny full / qwen3 lora / qlora).
+
+    Returns (model, base_param_count, checkpoint).  ``base_param_count`` is the
+    pre-quantization parameter count (config-derived for QLoRA so Full vs LoRA
+    vs QLoRA MFU shares one denominator).
+    """
     model = config.model
     dtype = torch.bfloat16 if model.bf16 else torch.float32
     if model.kind == "tiny":
@@ -177,7 +182,7 @@ def load_base_model(config: SftConfig, device: torch.device, pad_id: int = 2):
                 f"{model.init_checkpoint}: state dict mismatch missing={missing} unexpected={unexpected}"
             )
         net = net.to(dtype).to(device)
-        return net, checkpoint
+        return net, sum(p.numel() for p in net.parameters()), checkpoint
 
     base = AutoModelForCausalLM.from_pretrained(
         model.path,
@@ -187,8 +192,9 @@ def load_base_model(config: SftConfig, device: torch.device, pad_id: int = 2):
             _bnb_config() if config.qlora else None
         ),
     ).to(device)
+    base_param_count = sum(p.numel() for p in base.parameters())
     if config.lora is None:
-        return base, None
+        return base, base_param_count, None
     lora = LoraConfig(
         r=config.lora.rank,
         lora_alpha=config.lora.alpha,
@@ -201,7 +207,7 @@ def load_base_model(config: SftConfig, device: torch.device, pad_id: int = 2):
         from peft import prepare_model_for_kbit_training
 
         base = prepare_model_for_kbit_training(base)
-    return get_peft_model(base, lora), None
+    return get_peft_model(base, lora), base_param_count, None
 
 
 def _bnb_config():
@@ -239,10 +245,9 @@ class SftTrainer:
         self.val_stream, self.val_mask, self.val_meta = self._load_stream(VAL_SPLIT)
 
         torch.manual_seed(config.train.seed)
-        self.model, self.init_ckpt = load_base_model(
+        self.model, self.base_param_count, self.init_ckpt = load_base_model(
             config, device, pad_id=self.special_ids["pad"]
         )
-        self.base_param_count = sum(p.numel() for p in self.model.base_model.parameters()) if config.is_peft else sum(p.numel() for p in self.model.parameters())
         self.trainable_param_count = sum(
             p.numel() for p in self.model.parameters() if p.requires_grad
         )
@@ -458,6 +463,23 @@ class SftTrainer:
             "val_blocks": count,
         }
 
+    def _model_state_for_ckpt(self) -> dict[str, torch.Tensor]:
+        """Checkpoint state: full params for tiny Full-SFT, trainable (adapter) params for PEFT.
+
+        QLoRA quantized base weights are not serialized (they are recreated from
+        the on-disk base model on resume); only LoRA adapter weights round-trip.
+        """
+        if self.config.is_peft:
+            return {
+                name: param.detach().cpu()
+                for name, param in self.model.named_parameters()
+                if param.requires_grad
+            }
+        return {
+            name: param.detach().cpu()
+            for name, param in self.model.state_dict().items()
+        }
+
     def save_checkpoint(self, tag: str) -> Path:
         ckpt_dir = self.run_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -474,7 +496,7 @@ class SftTrainer:
                 "tokens": int(self.train_meta["tokens"]),
                 "seq_len": self.config.model.seq_len,
             },
-            "model_state": self.model.state_dict(),
+            "model_state": self._model_state_for_ckpt(),
             "optimizer_state": self.optimizer.state_dict(),
             "sampler_state": self.sampler.state(),
             "torch_rng_state": torch.get_rng_state(),
@@ -511,7 +533,13 @@ class SftTrainer:
         }
         if payload.get("stream") != current_stream:
             raise ValueError(f"{checkpoint}: token stream mismatch with checkpoint")
-        self.model.load_state_dict(payload["model_state"])
+        missing, unexpected = self.model.load_state_dict(
+            payload["model_state"], strict=not self.config.is_peft
+        )
+        if self.config.is_peft and unexpected:
+            raise ValueError(f"{checkpoint}: unexpected keys in adapter state: {unexpected}")
+        if missing:
+            raise ValueError(f"{checkpoint}: missing keys in model state: {missing}")
         self.optimizer.load_state_dict(payload["optimizer_state"])
         self.sampler.set_state(payload["sampler_state"])
         torch.set_rng_state(payload["torch_rng_state"])

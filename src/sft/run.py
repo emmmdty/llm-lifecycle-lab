@@ -270,7 +270,7 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 def _dry_run(config: SftConfig, paths: dict[str, Path], device: torch.device) -> None:
     tokenizer, special_ids, _ = _load_tokenizer_for(config, paths)
-    model, _ = load_base_model(config, device, pad_id=special_ids["pad"])
+    model, _, _ = load_base_model(config, device, pad_id=special_ids["pad"])
     tc = config.train
     seq_len = config.model.seq_len
     input_ids = torch.randint(0, _vocab_of(config), (tc.micro_batch_size, seq_len), device=device)
