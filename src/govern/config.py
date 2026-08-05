@@ -141,9 +141,9 @@ DATASETS: dict[str, DatasetSpec] = {
         transform="chartqa",
         split_strategy="official",
         official_files={
-            "train": ("chartqa-swift/train-*.parquet",),
-            "validation": ("chartqa-swift/val-*.parquet",),
-            "test": ("chartqa-swift/test-*.parquet",),
+            "train": ("chartqa-swift/data/train-*.parquet",),
+            "validation": ("chartqa-swift/data/val-*.parquet",),
+            "test": ("chartqa-swift/data/test-*.parquet",),
         },
         projection=("type", "question", "answer"),
         budget=5_000,
