@@ -13,7 +13,7 @@ from typing import Any, Sequence
 
 import torch
 
-from .config import CptConfig, effective_batch_tokens, total_budget_tokens
+from .config import CptConfig, TrainConfig, effective_batch_tokens, total_budget_tokens
 from .eval import (
     build_comparison,
     evaluate_streams,
@@ -250,26 +250,28 @@ def cmd_train(args: argparse.Namespace) -> int:
         _dry_run(config, paths, device)
         return 0
 
+    train_overrides: dict[str, Any] = {}
     if args.max_steps is not None:
-        config = replace(config, train=replace(config.train, max_steps=args.max_steps))
+        train_overrides["max_steps"] = args.max_steps
     if args.micro_batch_size is not None:
-        config = replace(
-            config, train=replace(config.train, micro_batch_size=args.micro_batch_size)
-        )
+        train_overrides["micro_batch_size"] = args.micro_batch_size
     if args.grad_accum_steps is not None:
-        config = replace(
-            config, train=replace(config.train, grad_accum_steps=args.grad_accum_steps)
-        )
+        train_overrides["grad_accum_steps"] = args.grad_accum_steps
     if args.warmup_steps is not None:
-        config = replace(
-            config, train=replace(config.train, warmup_steps=args.warmup_steps)
-        )
+        train_overrides["warmup_steps"] = args.warmup_steps
     if args.seed is not None:
-        config = replace(config, train=replace(config.train, seed=args.seed))
+        train_overrides["seed"] = args.seed
     if args.val_every is not None:
-        config = replace(config, train=replace(config.train, val_every=args.val_every))
+        train_overrides["val_every"] = args.val_every
     if args.ckpt_every is not None:
-        config = replace(config, train=replace(config.train, ckpt_every=args.ckpt_every))
+        train_overrides["ckpt_every"] = args.ckpt_every
+    if train_overrides:
+        from dataclasses import fields
+
+        tc = config.train
+        train_fields = {f.name: getattr(tc, f.name) for f in fields(tc)}
+        train_fields.update(train_overrides)
+        config = replace(config, train=TrainConfig(**train_fields))
     if args.no_bf16:
         config = replace(
             config, model=replace(config.model, bf16=False)
