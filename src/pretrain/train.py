@@ -281,7 +281,7 @@ class Trainer:
     def _resume(self, checkpoint: Path) -> None:
         if not checkpoint.is_file():
             raise FileNotFoundError(f"checkpoint missing: {checkpoint}")
-        payload = torch.load(checkpoint, map_location=self.device)
+        payload = torch.load(checkpoint, map_location="cpu")
         if payload.get("format") != "llm-lifecycle-lab pretrain checkpoint v1":
             raise ValueError(f"{checkpoint}: unsupported checkpoint format")
         if payload.get("config") != asdict(self.config):
@@ -303,8 +303,11 @@ class Trainer:
         self.optimizer.load_state_dict(payload["optimizer_state"])
         self.sampler.set_state(payload["sampler_state"])
         torch.set_rng_state(payload["torch_rng_state"])
-        if payload.get("cuda_rng_state") is not None and self.device.type == "cuda":
-            torch.cuda.set_rng_state_all(payload["cuda_rng_state"])
+        cuda_rng_state = payload.get("cuda_rng_state")
+        if cuda_rng_state is not None and self.device.type == "cuda":
+            torch.cuda.set_rng_state_all(
+                [state.to(self.device) for state in cuda_rng_state]
+            )
         self.global_step = int(payload["global_step"])
         self.resume_info = {
             "checkpoint": str(checkpoint),
