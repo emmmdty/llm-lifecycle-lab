@@ -188,6 +188,13 @@ def test_transforms_behavior() -> None:
         "question": "q",
         "answer": "a",
         "type": "t",
+        "human_or_machine": None,
+    }
+    assert TRANSFORMS["chartqa"]({"query": "q2", "label": ["14", "15"], "human_or_machine": 1}) == {
+        "question": "q2",
+        "answer": "14, 15",
+        "type": "swift",
+        "human_or_machine": 1,
     }
 
 

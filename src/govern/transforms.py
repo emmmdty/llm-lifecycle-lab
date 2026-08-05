@@ -61,13 +61,19 @@ def ultrafeedback(row: dict) -> dict | None:
 
 
 def chartqa(row: dict) -> dict | None:
-    question = str(row.get("question") or "").strip()
+    question = str(row.get("question") or row.get("query") or "").strip()
     if not question:
         return None
+    label = row.get("label")
+    if isinstance(label, list):
+        answer = ", ".join(str(item).strip() for item in label if str(item).strip())
+    else:
+        answer = str(row.get("answer") or label or "").strip()
     return {
         "question": question,
-        "answer": str(row.get("answer") or "").strip(),
-        "type": str(row.get("type") or "").strip(),
+        "answer": answer,
+        "type": str(row.get("type") or "swift").strip(),
+        "human_or_machine": row.get("human_or_machine"),
     }
 
 
