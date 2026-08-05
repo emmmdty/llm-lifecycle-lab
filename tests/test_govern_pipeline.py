@@ -16,6 +16,21 @@ from govern.pipeline import (
 from govern.transforms import TRANSFORMS
 
 
+def _read_output(out: Path, name: str, fmt: str) -> list[dict]:
+    path = out / "test-ds" / f"{name}.{fmt}"
+    if fmt == "parquet":
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(path)
+        return table.to_pylist()
+    if fmt == "jsonl":
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+        ]
+    raise ValueError(f"unsupported output format: {fmt}")
+
+
 def _make_spec(overrides: dict) -> DatasetSpec:
     base = dict(
         name="test-ds",
@@ -86,8 +101,7 @@ def test_shuffle_split_is_reproducible_and_disjoint() -> None:
 
     def read_split(manifest: dict, out_root: Path, name: str) -> list[str]:
         fmt = manifest["partitions"][name]["format"]
-        path = out_root / "test-ds" / f"{name}.{fmt}"
-        return [line for line in path.read_text(encoding="utf-8").splitlines()]
+        return [record["text"] for record in _read_output(out_root, name, fmt)]
 
     t1, v1, e1 = read_split(m1, out1, "train"), read_split(m1, out1, "validation"), read_split(m1, out1, "test")
     t2 = read_split(m2, out2, "train")
@@ -137,9 +151,8 @@ def test_group_split_no_prompt_crosses_partitions() -> None:
 
     assigned: dict[str, set[str]] = {}
     for name in ("rm_train", "rm_val", "eval"):
-        fmt = manifest["partitions"][name]["format"]
-        texts = (out / "test-ds" / f"{name}.{fmt}").read_text(encoding="utf-8").splitlines()
-        assigned[name] = {json.loads(line)["instruction"] for line in texts}
+        records = _read_output(out, name, manifest["partitions"][name]["format"])
+        assigned[name] = {record["instruction"] for record in records}
     assert len(assigned["rm_train"]) == 40
     assert len(assigned["rm_val"]) == 10
     assert len(assigned["eval"]) == 20
