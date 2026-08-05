@@ -53,6 +53,14 @@
 
 解读（重要，避免误读）：26.8M 绝对 loss 更低是因为投入了 5× 算力，不是"D≈20N 失效"。按 Chinchilla 固定算力最优分配，26.8M 对应最优规模应约 10M（若数据允许扩到 ~200M token）；其 t/p=3.0 处于**数据受限区**——继续加参不如加数据。5.32M 在 80M 数据下同时接近数据最优与算力最优。决策已同步 docs/01（模型路线 §3.1）。
 
+**Q2 延伸（✅ 已验证，2026-08-05 阶段 6）：D≈20N 决策方法应用于 LoRA 可训练参数量（Q15）**。tigerbot-law domain_train 经 Qwen3 tokenizer 实测 D=3,912,160 token：
+
+- unique 读法（Chinchilla 的 D 指语料规模）：N_target = D/20 ≈ 196K；
+- seen 读法（训练 3 epoch，FLOPs≈6ND_seen，D_seen=3D=11.74M）：N_target = 3D/20 ≈ 587K；
+- 候选（q/k/v/o，Qwen3 实际维度 q/o 为 2048 维）：rank 1=286,720（unique 1.47×）、rank 2=573,440（seen **0.98×**、unique 2.93×）、rank 4=1,146,880；
+- **决策：rank 2（573,440 可训练参数，base 596M 的 0.096%）**——匹配 seen 读法；相对 unique 读法放宽 2.9×，理由：base 已预训练，adapter 只学领域分布偏移（与"从零训练"的 N 语义不同），且 rank≥2 保证低秩更新稳定性；
+- 实测（360 步/3 epoch/seed 42）：domain_val ppl 7.015→4.795（-31.6%），无通用退化（见 docs/00 阶段 6 补充）。
+
 ## 3. 我们的真实瓶颈在哪里？
 
 阶段 4 实测：峰值显存 1.22GB / 32GB（3.8%）、606K tokens/s、MFU ≈ 17%（实测有效算力 ~66 TFLOPS / 5090 FP16 峰值约 380 TFLOPS）。
@@ -123,14 +131,14 @@ README 事实（2026-08-05 核实）：
 - Q7：序列长度与位置编码（512 learned-absolute vs 1024/RoPE）对生成质量的影响。**（阶段 5 未验证：512→1024 同时换了语料与词表，对照被混淆；留待阶段 12 或专门实验）**
 
 **评价侧**
-- Q8：效果评价升级——仅 val ppl 不够。需补充：val-train gap（过拟合诊断）、生成重复率/多样性、固定 prompt 人工对照（已有 samples.jsonl 基础）、任务级评测（阶段 12 统一评测；此前可引入轻量过渡评测）。**✅ 部分验证（阶段 5）：val-train gap 已纳入 metrics（5 个规模/语料全部为正且很小：0.017–0.147，无过拟合）；生成多样性（distinct 4-gram ratio）已纳入分析（TinyStories 模型 1.0，Wikitext 模型 0.59–0.63——后者重复退化明显，与人工查看一致）；任务级/过渡评测未做（留待阶段 12）。**
+- Q8：效果评价升级——仅 val ppl 不够。需补充：val-train gap（过拟合诊断）、生成重复率/多样性、固定 prompt 人工对照（已有 samples.jsonl 基础）、任务级评测（阶段 12 统一评测；此前可引入轻量过渡评测）。**✅ 已验证（阶段 5 + 阶段 6）：val-train gap 已纳入 metrics（全部运行 gap>0 且小：0.017–0.147）；生成多样性（distinct 4-gram ratio）已纳入（TinyStories 1.0、Wikitext 0.59–0.63、阶段 6 CPT 0.632→0.655）；阶段 6 固定 3 prompt（法律/中文日常/英文）Base vs CPT 生成对照入 reports/cpt-compare-formal.json；任务级评测留待阶段 12。**
 
 ## 5. 如何评价模型训练效果（诊断清单）
 
 | 层面 | 指标 | 状态 |
 | --- | --- | --- |
 | 训练曲线 | train/val loss、ppl、grad norm、lr | 已记录（metrics.jsonl） |
-| 稳定性 | NaN/Inf、loss spike、seed 敏感性 | 已记录（无 NaN）；seed 敏感性未系统验证（Q9）；resume 实验发现 BF16 最后一位非确定性（~1e-5 相对误差，详见 docs/00 阶段 5 补充） |
+| 稳定性 | NaN/Inf、loss spike、seed 敏感性 | 已记录（无 NaN）；seed 敏感性 Q9 ✅（阶段 6 双 seed <0.1%）；resume 时 BF16 最后一位非确定性（~1e-5 相对误差） |
 | 效率 | tokens/s、step time、峰值显存、**MFU** | 前三已记录；MFU 已纳入运行记录（Q10 ✅，阶段 5：5M=3.4%、18M≈17%、64M=16.6%、Wiki-5.3M=4.1%、Wiki-26.8M=9.3%，基准 5090 FP16 dense 380 TFLOPS，config 字段 `peak_flops`） |
 | 基线对比 | 随机初始化 loss（≈ln V=9.70，实测 9.81）、训练后下降幅度 | 已有 |
 | 拟合诊断 | val-train gap、多 checkpoint val 曲线 | 已有（Q8 ✅：全部运行 gap>0 且小） |
@@ -158,10 +166,11 @@ README 事实（2026-08-05 核实）：
 | Q5 | 超参敏感性（lr/batch/warmup/min_lr） | 阶段 5+ | 待验证 |
 | Q6 | dropout 在多 epoch 场景的作用 | 阶段 5+ | 待验证 |
 | Q7 | 序列长度与位置编码对比 | 阶段 5 | 未验证（512→1024 换语料/词表，对照混淆；留待阶段 12 或专门实验） |
-| Q8 | 效果评价升级（gap/多样性/过渡评测） | 阶段 5/12 | ✅ 部分验证（val-train gap + 4-gram 多样性已纳入；任务级评测留待阶段 12） |
-| Q9 | seed 敏感性（同配置多 seed 曲线差异） | 阶段 5+ | 待验证（阶段 5 顺带发现 resume 时 BF16 最后一位非确定性） |
+| Q8 | 效果评价升级（gap/多样性/过渡评测） | 阶段 5/12 | ✅ 已验证（阶段 5：val-train gap + 4-gram 多样性纳入；阶段 6 补充：固定 3 prompt Base vs CPT 生成对照 + 多样性 0.632→0.655；任务级评测留待阶段 12） |
+| Q9 | seed 敏感性（同配置多 seed 曲线差异） | 阶段 5+ | ✅ 已验证（阶段 6：CPT 全配置 360 步 seed 42 vs 43，domain ppl 4.801 vs 4.799 <0.1%、general <1%；resume 时 BF16 最后一位非确定性依旧存在） |
 | Q10 | MFU 纳入运行记录 | 阶段 5 | ✅ 已验证（metrics/run.json 均有 mfu；config 增加 peak_flops 字段） |
 | Q11 | 扩大训练规模的正式决策：**2026-08-05 已决策**——物理资源允许（磁盘 2TB、显存 32GB、ModelScope 可达、64M 级约 50 分钟），修改规则为"单次大显存 GPU 任务默认 ≤8h，可放宽，硬上限 <24h"（AGENTS.md/docs/01/docs/05 已同步）；扩大语料（如 minimind_dataset，Apache-2.0）需走数据治理流程 | 决策已完成 | ✅ 已决策 |
 | Q12 | 词表大小与参数占比（minimind 6400 vs 本项目 16384；embedding 占比对总参数量影响） | 阶段 5 | ✅ 已验证（embedding 占比：TS-5M=42%、TS-18M=48%、TS-64M=13%、Wiki-5.3M=**81%**、Wiki-26.8M=65%；32k 词表在小模型上 embedding 严重挤占参数，佐证 minimind 精简词表经验） |
 | Q13 | 深窄 vs 宽浅（MobileLLM；本项目 hidden=512 处于 d_model<512 劣势边界） | 阶段 5 | 未验证（5M 为深窄 h=128×15 层、18M/64M 为 h=512，规模不同不可直接对照；留待专门实验） |
 | Q14 | 跨 tokenizer 效果评价改用 BPB（Bits Per Byte） | 阶段 5/12 | 待验证（阶段 5 记录了相关事实：32k BPE 编码 Wikitext 得 92.3M token vs manifest 16k 估算 80M，byte-level BPE 对 wiki 标记文本的压缩率低于普通英文） |
+| Q15 | D≈20N 决策方法扩展到 LoRA-CPT 可训练参数量 | 阶段 6 | ✅ 已验证（rank 2=573,440 匹配 seen 读法 3D/20≈587K（0.98×）；unique 读法放宽 2.9×；详见第 2 节 Q2 延伸） |

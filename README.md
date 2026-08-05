@@ -6,15 +6,16 @@ English summary: this repository is a staged learning lab for the LLM lifecycle,
 
 ## 当前阶段
 
-项目已完成数据治理（阶段 2）、tokenizer（阶段 3）和 TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）。当前执行阶段 5（Wikitext 正式教学预训练，30M–60M 模型）的开发准备。
+项目已完成数据治理（阶段 2）、tokenizer（阶段 3）、TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）、Wikitext 正式教学预训练（阶段 5，Q1 缩放实验 + Q2 决策 + 80M token 正式训练）和 Qwen3 CPT（阶段 6，rank-2 LoRA 573K 可训练参数、tigerbot-law 3.91M domain token、domain ppl -31.6%、通用无退化、7.4 分钟完成）。当前执行阶段 7（SFT）的开发准备。
 
-阶段 4 停止条件已满足：
+阶段 6 停止条件已满足：
 
-- 本地单元测试通过（torch-free 核心逻辑全测，torch 测试在服务器全量跑）；
-- 服务器按顺序完成单 batch、5 step smoke、150 step 基准与人工确认后正式训练；
-- loss 持续下降（val ppl 24.3 → 5.28），checkpoint resume 曲线逐位连续，训练后生成明显连贯；
-- command/config/environment/hardware/revision/seed/metrics 全部记录在 `runs/` 与 `reports/`；
-- 正式运行 GPU 总时长 646.8 秒，远低于 2 小时预算。
+- 本地单元测试通过（85 passed + 1 skipped，torch-free 核心逻辑全测，服务器 96 passed）；
+- 服务器按顺序完成 dry-run、单 batch、5 step smoke、150 step 基准（30K tokens/s、MFU 49.8%）、resume 连续性验证与人工确认后正式训练；
+- domain perplexity 7.015 → 4.795（-31.6%），通用退化被量化（identical-framing 下无退化，框架诊断见 reports/cpt-framing-diagnostic.json）；
+- adapter 重载往返一致（重载 ppl vs 训练末次 val 差异 ~1e-3，BF16 最后一位非确定性）；
+- 正式训练 446.5 秒（7.4 分钟），远低于 3 小时预算；
+- command/config/environment/hardware/revision/seed/metrics 全部记录在 `runs/` 与 `reports/`。
 
 ## 本地与服务器职责
 

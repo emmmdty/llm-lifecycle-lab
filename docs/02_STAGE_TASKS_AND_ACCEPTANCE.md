@@ -214,6 +214,10 @@ Codex 不得在 smoke test 后自动开始正式训练。
 - adapter 可重新加载；
 - 训练不超过 3 小时。
 
+### 完成状态（2026-08-05）
+
+阶段 6 已完成：tigerbot-law 领域 LoRA-CPT（Qwen3-0.6B-Base，rank-2 adapter 573K 可训练参数，6ND 决策见 docs/06 Q15），domain held-out（title 分组 3.91M token）+ general held-out（wikitext/tinystories validation，Qwen tokenizer 编码），Base vs CPT 对比评测，Q8/Q9 顺带验证。全部验收项证据见 docs/00「阶段 6」补充、reports/cpt-compare-formal.json、runs/20260805-211848。
+
 ---
 
 ## 阶段 7：SFT

@@ -337,3 +337,45 @@ reports/stage5-analysis.json
 - **失败与未完成**：Q7/Q13 未验证（对照混淆/规模不可比，已记录）；Q8 任务级评测留待阶段 12；Q3 只做了 5M 单模型。
 
 阶段 6 可执行条件：预训练框架与规模决策方法已就绪；Qwen3 CPT 直接进入阶段 6 任务。
+
+## 2026-08-05 补充：阶段 6 Qwen3 CPT 完成
+
+阶段 6 在 5090 上完成：tigerbot-law 中文领域 LoRA-CPT（Qwen3-0.6B-Base + rank-2 LoRA），domain/general held-out 对比评测，adapter 重载验证，Q8/Q9 顺带验证。
+
+### 新增服务器资产
+
+```text
+data/processed/tigerbot-law-cpt/tokens/qwen3/
+  domain_train.bin + .json（3,912,160 tokens，52,810 docs）
+  domain_val.bin + .json（208,584 tokens，2,648 docs）
+data/processed/general-wikitext/tokens/qwen3/validation.bin + .json（261,118 tokens）
+data/processed/general-tinystories/tokens/qwen3/validation.bin + .json（3,076,291 tokens）
+data/manifests/tigerbot-law-cpt.json（切分策略/seed/token 统计/许可证）
+
+runs/smoke6/20260805-210911/    5 step smoke
+runs/bench6/20260805-211005/    150 step 基准 + resume 连续性验证（step-75 恢复）
+runs/20260805-211848/           正式训练 seed 42（360 步，7.4 分钟）
+runs/20260805-212917/           Q9 双 seed 对照 seed 43（360 步）
+reports/cpt-compare-formal.json  Base vs CPT 对比（ppl + 生成）
+reports/cpt-framing-diagnostic.json  EOS 前缀框架诊断矩阵
+logs/cpt/*.log
+```
+
+### 阶段 6 关键结果
+
+- **数据**：tigerbot-law 治理产物（train+validation，test 为空且排除）按 title 文档分组 95/5 重切（seed 42，同一 document 不跨 split），Qwen3 tokenizer 编码：domain_train 3.91M token、domain_val 209K；general held-out 复用治理 validation parquet 重新编码（wikitext 261K、tinystories 3.08M），未下载任何新数据。
+- **6ND LoRA 规模决策**：D=3.91M → unique 读法 N=D/20≈196K；seen 读法（3 epoch）N=3D/20≈587K。rank-2（q/k/v/o，573,440 可训练参数 = base 0.096%）匹配 seen 读法（0.98×），相对 unique 读法放宽 2.9×（base 已预训练、adapter 只学分布偏移，已记录理由）。
+- **正式训练**（seed 42，run 20260805-211848）：360 步 / 11.8M token / 446.5 秒（7.4 分钟，预算 3h）；26,421 tokens/s、1.24s/step、MFU 49.8%、峰值显存 14.1GB；train loss 1.907→1.496。
+- **Base vs CPT（同一脚本/held-out/tokenizer，100 块 seed 1234）**：domain_val ppl 7.015→4.795（**-31.6%**）；wikitext 17.176→14.495（-15.6%）；tinystories 7.013→6.137（-12.5%）。
+- **通用退化结论（诚实解读）**：identical-framing 下 general 未见退化，反而略降；框架诊断（EOS-as-BOS 前缀）显示 base 在该框架下被惩罚 0.7–1.2 ppl，CPT 通过训练适应了该框架；用 no_bos 框架保守对照，CPT 仍不劣于 base（domain 6.75→5.83，wikitext 15.88→15.34，tinystories 6.16→6.12）。结论：rank-2 LoRA-CPT 带来显著领域改善且无可量化通用退化。
+- **adapter 重载**：PeftModel.from_pretrained 重载后 domain ppl 4.795 vs 训练末次 val 4.801（~1e-3 差异，BF16 最后一位非确定性），往返一致。
+- **Q8**：固定 3 prompt（法律/中文日常/英文经济）Base vs CPT 生成对照入 reports/cpt-compare-formal.json；多样性（distinct 4-gram）0.632→0.655。
+- **Q9**：seed 42 vs 43 全配置对照，domain ppl 4.801 vs 4.799（<0.1%）、general <1%，seed 敏感性低。
+
+### 环境变更（2026-08-05，阶段 6）
+
+- `.venv-train` 追加 `ziglang==0.16.0`：服务器无系统 C 编译器（gcc/clang 均无）且系统 Python 无开发头文件（/usr/include/python3.12/Python.h 缺失），torch 2.13 原生 op bmm_outer_product（Qwen3 rotary 内部使用）走 triton 实现，triton 首次运行需编译 cuda_utils 驱动模块。
+- 解决：`uv pip install ziglang` + `.venv-train/bin/zig-cc` 包装器（`zig cc`，把 `-l:libcuda.so.1` 译为绝对路径输入）；`uv python install 3.12` 获取带头文件的 CPython，`.triton-cc/sitecustomize.py` 重定向 sysconfig include（该目录已在服务器 `.git/info/exclude` 忽略，不进 Git）；`libcuda.so.1` 复制进 triton nvidia lib 目录。triton cuda_utils 一次性编译成功并缓存。
+- `uv pip check` 通过；freeze 已更新（reports/5090-train-freeze.txt）。
+
+阶段 7 可执行条件：LoRA-CPT 管线（prep/train/eval/compare）与 Qwen 模型加载经验已就绪；SFT 直接复用本阶段 adapter 机制与 tokenizer。

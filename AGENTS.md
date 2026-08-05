@@ -35,9 +35,9 @@
 
 ## 当前阶段
 
-阶段 0–5 已完成（审计 / 环境 / 数据治理 / Tokenizer / TinyStories 快速预训练 / Wikitext 正式预训练，见 docs/00 各阶段补充）。当前执行阶段 6：Qwen3 CPT（LoRA-CPT、domain 与 general held-out 准备、Base 与 CPT perplexity 对比）。
+阶段 0–6 已完成（审计 / 环境 / 数据治理 / Tokenizer / TinyStories 快速预训练 / Wikitext 正式预训练 / Qwen3 CPT，见 docs/00 各阶段补充）。当前执行阶段 7：SFT（小模型 Full-SFT 与 Qwen3 LoRA/QLoRA-SFT 双实验，chat template、assistant-only loss、adapter merge）。
 
-当前不编写 Qwen 训练代码，不启动 GPU 训练或推理，不修改服务器系统配置。模型、数据和环境准备只在用户明确授权时执行；未授权的后续训练、评测、量化和部署只记录，不顺手实现。完成条件是阶段 6 任务与验收逐项达成、文档一致、服务器资产事实可追溯。
+当前不编写 SFT 训练代码，不启动 GPU 训练或推理，不修改服务器系统配置。模型、数据和环境准备只在用户明确授权时执行；未授权的后续训练、评测、量化和部署只记录，不顺手实现。完成条件是阶段 7 任务与验收逐项达成、文档一致、服务器资产事实可追溯。
 
 ## 本地与服务器职责
 
