@@ -259,3 +259,4 @@ uv pip freeze: reports/4090-train-freeze.txt
 - 本地：`tests/test_repository_contract.py` 通过（7 passed），大资产由 `.gitignore` 排除，初始 commit 已推送至 `https://github.com/emmmdty/llm-lifecycle-lab.git`（分支 `main`）。
 - 服务器：通过 `git fetch` + checkout 同步源码，`models/`、`data/`、`logs/`、`reports/`、`artifacts/`、`runs/`、`.venv-*` 和 `requirements-*-lock.txt` 等未跟踪资产保持原状，未被覆盖或删除。
 - 服务器 GitHub 访问：`tongjiakai` 用户已配置与本地一致的 gh CLI 认证（`~/.local/bin/gh`、`~/.config/gh/hosts.yml` 0600）和 git 身份；实测直连 github.com 可用，无代理镜像，git fetch/push 验证通过。
+- 2026-08-05 补充：github.com 直连在服务器上间歇性不可达，已配置长期 fallback——`origin` fetch URL 指向 `gh-proxy.com` 镜像（读走镜像），push URL 保持直连 GitHub（gh 凭据仅对 github.com 生效）；镜像完整性以 commit 哈希校验。

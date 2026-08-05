@@ -167,11 +167,12 @@ git fetch --all --prune
 git pull --ff-only
 ```
 
-服务器 GitHub 访问为直连 HTTPS，不使用代理镜像（2026-08-04 验证：github.com 可达，git fetch/push 正常；此前文档中的镜像假设已移除）。`tongjiakai` 用户已配置与本地一致的 GitHub 环境：
+服务器 GitHub 访问以直连为主；2026-08-05 起配置长期 fallback：**读走镜像、写走直连**，应对 github.com 直连间歇性不可达。`tongjiakai` 用户已配置：
 
 - git 身份：`user.name=emmmdty`、`user.email=emmmtjk@163.com`；
 - 认证：gh CLI（`~/.local/bin/gh`）凭据助手，token 位于 `~/.config/gh/hosts.yml`（权限 0600）；
-- 项目仓库 `main` 已设置上游跟踪 `origin/main`。
+- 项目仓库 remote：`origin` fetch URL 指向 `gh-proxy.com` 镜像（只读操作走镜像），push URL 保持直连 GitHub（写操作必须走直连，因为 gh 凭据只对 `github.com` 主机生效）；
+- `main` 已设置上游跟踪 `origin/main`。
 
 若遇到认证或连通问题，先检查：
 
@@ -179,9 +180,10 @@ git pull --ff-only
 git remote -v
 gh auth status
 git fetch --dry-run
+git push --dry-run
 ```
 
-不得覆盖既有全局 git 配置。
+注意：镜像不保证 100% 可用（gh-proxy.com 曾多次连通/失败交替），故障时以直连或重试为准。不得覆盖既有全局 git 配置。
 
 5090 不可达且使用 4090 fallback 时：
 
