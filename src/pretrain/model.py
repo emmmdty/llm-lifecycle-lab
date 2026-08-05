@@ -95,9 +95,10 @@ class DecoderOnlyCausalLM(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.apply(self._init_weights)
         scale = (2 * config.num_hidden_layers) ** -0.5
-        for layer in self.layers:
-            layer.attention.o_proj.weight.mul_(scale)
-            layer.ffn.down.weight.mul_(scale)
+        with torch.no_grad():
+            for layer in self.layers:
+                layer.attention.o_proj.weight.mul_(scale)
+                layer.ffn.down.weight.mul_(scale)
         if config.tie_word_embeddings:
             self.lm_head.weight = self.token_embed.weight
 
