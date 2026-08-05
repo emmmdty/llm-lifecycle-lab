@@ -22,7 +22,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pretrain.analyze import diversity_stats
 from pretrain.data import open_stream_memmap, validation_offsets
 
-from .train import generate_conversation
+from .train import generate_conversation, model_logits
 
 log = logging.getLogger("sft.eval")
 
@@ -154,7 +154,7 @@ def evaluate_assistant_loss(
             input_ids = torch.as_tensor(inputs, dtype=torch.long, device=device)
             label_ids = torch.as_tensor(labels, dtype=torch.long, device=device)
             label_ids[torch.as_tensor(masks == 0, device=device)] = -100
-            logits = model(input_ids=input_ids).logits
+            logits = model_logits(model, input_ids)
             loss = F.cross_entropy(logits.reshape(-1, vocab), label_ids.reshape(-1))
             total += loss.item()
             count += 1

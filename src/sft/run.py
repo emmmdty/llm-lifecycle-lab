@@ -279,7 +279,9 @@ def _dry_run(config: SftConfig, paths: dict[str, Path], device: torch.device) ->
     with torch.autocast(
         "cuda", dtype=torch.bfloat16, enabled=config.model.bf16 and device.type == "cuda"
     ):
-        logits = model(input_ids=input_ids).logits
+        from .train import model_logits
+
+        logits = model_logits(model, input_ids)
         loss = torch.nn.functional.cross_entropy(
             logits.reshape(-1, logits.shape[-1]), labels.reshape(-1)
         )

@@ -51,6 +51,16 @@ SAMPLE_TEMPERATURE = 0.8
 SAMPLE_TOP_K = 50
 
 
+def model_logits(model: nn.Module, input_ids: torch.Tensor) -> torch.Tensor:
+    """Extract logits from a HF-style model (returns dict) or the tiny model (returns tensor)."""
+    out = model(input_ids=input_ids)
+    if isinstance(out, dict):
+        return out["logits"]
+    if isinstance(out, torch.Tensor):
+        return out
+    raise TypeError(f"unsupported model output type: {type(out)}")
+
+
 def generate_conversation(
     *,
     model: nn.Module,
@@ -354,7 +364,7 @@ class SftTrainer:
         tc = self.config.train
         offsets = self.sampler.offsets(tc.micro_batch_size)
         input_ids, label_ids = self._blocks(self.train_stream, self.train_mask, offsets)
-        logits = self.model(input_ids=input_ids).logits
+        logits = model_logits(self.model, input_ids)
         return F.cross_entropy(logits.reshape(-1, logits.shape[-1]), label_ids.reshape(-1))
 
     def train(self, max_steps_override: int | None) -> None:
@@ -433,7 +443,7 @@ class SftTrainer:
             total, count = 0.0, 0
             for offset in self.val_offsets:
                 input_ids, label_ids = self._blocks(self.val_stream, self.val_mask, [offset])
-                logits = self.model(input_ids=input_ids).logits
+                logits = model_logits(self.model, input_ids)
                 loss = F.cross_entropy(
                     logits.reshape(-1, vocab), label_ids.reshape(-1)
                 )
