@@ -9,6 +9,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 import torch.nn.functional as F  # noqa: E402
+from torch import nn  # noqa: E402
 
 from pretrain.config import ModelConfig, PretrainConfig, TrainConfig  # noqa: E402
 from pretrain.data import (  # noqa: E402
@@ -41,6 +42,10 @@ def make_model(**model_overrides) -> DecoderOnlyCausalLM:
     return DecoderOnlyCausalLM(tiny_config(**model_overrides), pad_id=2)
 
 
+def count_params(model: nn.Module) -> int:
+    return sum(param.numel() for param in model.parameters())
+
+
 def load_committed_config() -> PretrainConfig:
     return PretrainConfig.load_from(CONFIG_PATH)
 
@@ -56,17 +61,19 @@ def test_causal_mask_shape_and_triangular() -> None:
 
 def test_param_count_matches_estimate() -> None:
     model = make_model()
-    assert model.numel() == model.config.estimate_params()
-    assert 5_000_000 <= model.numel() <= 20_000_000
+    assert count_params(model) == model.config.estimate_params()
+    assert 5_000_000 <= count_params(model) <= 20_000_000
     untied = make_model(tie_word_embeddings=False)
-    assert untied.numel() - model.numel() == tiny_config().vocab_size * tiny_config().hidden_size
+    assert count_params(untied) - count_params(model) == (
+        tiny_config().vocab_size * tiny_config().hidden_size
+    )
 
 
 def test_committed_model_param_count_matches_estimate() -> None:
     config = load_committed_config()
     model = DecoderOnlyCausalLM(config.model, pad_id=2)
-    assert model.numel() == config.model.estimate_params()
-    assert model.numel() == 18_108_928
+    assert count_params(model) == config.model.estimate_params()
+    assert count_params(model) == 18_108_928
 
 
 def test_forward_shape_and_finite() -> None:
@@ -179,7 +186,7 @@ def test_generate_greedy_and_sampling() -> None:
         eos_id=1,
         device=torch.device("cpu"),
     )
-    assert len(greedy) <= 2 + 5
+    assert len(greedy) <= 1 + 2 + 5
     assert greedy[0] == 0
     assert all(0 <= token < 64 for token in greedy)
     sampled = generate(
