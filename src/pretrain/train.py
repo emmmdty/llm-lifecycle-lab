@@ -59,6 +59,7 @@ class Trainer:
         self._setup_model()
         self._setup_optimizer()
         self._setup_sampler()
+        self.global_step = 0
         self.resume_info: dict[str, Any] | None = None
         if resume_from is not None:
             self._resume(resume_from)
