@@ -95,15 +95,15 @@ def estimate_cpt_flops(
     tokens: int,
     epochs: int,
 ) -> float:
-    """Rough LoRA-CPT compute: full forward+backward through the frozen base.
+    """Rough LoRA-CPT compute: frozen-base forward+backward.
 
-    A LoRA step still runs the whole base forward and backward (gradients
-    flow through frozen layers to reach adapter weights), so FLOPs ~=
-    12 * N_full * D * epochs (6ND forward + 6ND backward).
+    A LoRA step still runs the whole base forward (2N/token) and backward for
+    input gradients only (2N/token); base weight gradients are not computed
+    because the base is frozen.  Total ~= 4 * N_full * D * epochs.
     """
     if full_params <= 0 or tokens < 0 or epochs < 1:
         raise ValueError("full_params > 0, tokens >= 0, epochs >= 1")
-    return 12.0 * full_params * tokens * epochs
+    return 4.0 * full_params * tokens * epochs
 
 
 def estimate_wall_time(flops: float, peak_flops: float, mfu: float) -> float:

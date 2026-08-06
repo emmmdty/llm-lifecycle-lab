@@ -176,7 +176,7 @@ def cmd_prepare(args: argparse.Namespace) -> int:
     domain = prepare_domain(
         processed_root=paths["data_dir"],
         out_corpus=config.data.domain_corpus,
-        source_corpus="tigerbot-law",
+        source_corpus=config.data.source_corpus,
         governed_splits=("train", "validation"),
         group_key_name=config.data.domain_group_key,
         val_frac=config.data.domain_val_frac,

@@ -154,11 +154,14 @@ def assign_splits(
         for split, record in records:
             result.setdefault(split, []).append(record)
         for split, items in result.items():
-            if spec.budget is not None and split == "train":
+            if split != "train":
+                continue
+            if spec.budget is not None:
                 rng.shuffle(items)
-                result[split] = items[: spec.budget]
-            if spec.token_cap is not None and split == "train":
-                result[split] = _apply_token_cap(spec, items, counter)
+                items = items[: spec.budget]
+            if spec.token_cap is not None:
+                items = _apply_token_cap(spec, items, counter)
+            result[split] = items
         return result
     if spec.split_strategy == "shuffle":
         all_records = [record for _, record in records]

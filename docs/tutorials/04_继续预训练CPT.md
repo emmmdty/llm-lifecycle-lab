@@ -35,6 +35,23 @@
 | 评测 | 同一脚本/held-out/tokenizer 下 Base vs CPT：domain_val、wikitext、tinystories 三组 ppl |
 | 预算 | 正式训练 ≤ 3 小时（实测 7.4 分钟） |
 
+## 1.1 为什么选 Qwen3-0.6B-Base？（模型选型理由）
+
+本项目第一次接触"别人的模型"，选型不是随意的，而是对照项目约束逐条筛出来的：
+
+| 约束 | Qwen3-0.6B-Base 是否满足 | 说明 |
+| --- | --- | --- |
+| 单卡 RTX 5090（32GB）可训 | ✅ | 596M 参数，BF16 加载约 1.2GB，LoRA 训练峰值显存 14GB，单卡轻松容纳 |
+| 预算内可完成多轮实验 | ✅ | LoRA-CPT 360 步实测 7.4 分钟，全天可跑几十轮对比实验 |
+| 中英双语覆盖 | ✅ | 预训练含中文，与本项目中文 CPT/SFT 语料语言匹配 |
+| 是 Base（未做后训练） | ✅ | Base 版没有 chat/指令后训练污染，适合演示"预训练 → CPT → SFT → DPO"整条链路，且与官方 Instruct 版（Qwen3-0.6B）形成对照 |
+| 官方 tokenizer 自带 chat template | ✅ | 阶段 7 SFT 直接复用（见教程 05） |
+| 生态成熟 | ✅ | HuggingFace/ModelScope 均有官方权重，transformers/PEFT/TRL 原生支持 |
+
+为什么不是更大的模型？7B 级模型在单卡 5090 上 LoRA 训练可达（显存约 50GB+ 超限，需 4-bit 且慢 10 倍以上），不符合"小数据、小模型、完整过程"的教学定位；0.6B 是"能装进单卡、能跑多轮、语言覆盖够"的最小交叉点。为什么不是更小的？Qwen3 没有更小的官方 Base 版本，且 0.1B 级模型指令能力过弱（阶段 7 的 18.1M 小模型已实测出现生成退化，见教程 05 第 5.4 节）。
+
+**关键澄清：本项目的 Qwen3-0.6B-Base 原始权重从未被修改。** 所有实验（CPT、SFT）都只训练 LoRA adapter（低秩矩阵，另存为独立 adapter 文件），冻结的 base 权重从磁盘加载后只读。`models/Qwen3-0.6B-Base/` 目录自阶段 0 下载后从未写入。`merge_and_unload` 合并产生的也是**新的模型文件**（在内存副本上完成），不会回写原目录。训练产物只有：`.pt` checkpoint（内含 adapter + 优化器 + RNG 状态）和 `*-adapter` 目录（PEFT 格式，可独立加载）。
+
 ## 2. CPT 是什么，为什么需要两组 held-out
 
 CPT 仍然使用 next-token 的 causal LM loss，和预训练一模一样；区别只有**数据分布**：

@@ -1,11 +1,11 @@
 % LLM Lifecycle Lab 教程全景图：数据下载 -> 治理 -> 训练就绪数据 -> 下游阶段
-\documentclass[border=10pt]{standalone}
+\documentclass[border=24pt]{standalone}
 \usepackage[fontset=none]{ctex}
 \setCJKmainfont{Noto Serif CJK SC}
 \setCJKsansfont{Noto Sans CJK SC}
 \setmainfont{Noto Sans CJK SC}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, fit}
+\usetikzlibrary{arrows.meta, positioning, fit, calc}
 
 \definecolor{cblue}{HTML}{2563EB}
 \definecolor{cgreen}{HTML}{059669}
@@ -22,7 +22,7 @@
 
 \tikzset{
   block/.style 2 args={draw=#1, fill=#2, rounded corners=3pt, inner sep=5pt, font=\small},
-  step/.style={draw=#1, fill=white, rounded corners=2pt, inner sep=4pt, font=\footnotesize, text=#1},
+  step/.style={draw=#1, fill=white, rounded corners=2pt, inner sep=3pt, font=\footnotesize, text=#1, align=center},
   box/.style 2 args={draw=#1!50, fill=#2, rounded corners=5pt, inner sep=6pt},
 }
 
@@ -41,16 +41,23 @@ ultrafeedback、gsm8k、ChartQA};
 HellaSwag、C-Eval};
 
 % ===== 中：治理管线 =====
-\node[box={cblue}{bgblue}, align=center] (gov) at (7.2,0) {\textbf{数据治理管线}\\[2pt]
+\node[box={cblue}{bgblue}, align=center] (gov) at (7.0,2.0) {\textbf{数据治理管线}\\[2pt]
 {\footnotesize 统一流程，逐数据集执行}};
 
+% 5x2 步骤网格：居中于 gov 下方，两行独立 y 坐标，列距 1.9cm，行距 0.8cm
 \foreach \s/\n [count=\i] in {
-  盘点/1, 许可证/2, schema 检查/3, 有界抽样/4, 清洗/5, 去重/6, 分组切分/7, Parquet/8, token 统计/9, manifest/10}{
-  \node[step=cblue, right=4pt of gov.south west, xshift=0pt, yshift=93pt-\i*11pt, align=center, text width=48pt] (g\i) {\n.\ \s};
+  盘点/1, 许可证/2, schema 检查/3, 有界抽样/4, 清洗/5}{
+  \pgfmathsetmacro{\colx}{(\i-2.5)*1.9}
+  \node[step=cblue, minimum width=1.6cm, anchor=center] at ([xshift=\colx cm, yshift=-1.35cm]gov.center) {\n.\ \s};
+}
+\foreach \s/\n [count=\i] in {
+  去重/6, 分组切分/7, Parquet/8, token 统计/9, manifest/10}{
+  \pgfmathsetmacro{\colx}{(\i-2.5)*1.9}
+  \node[step=cblue, minimum width=1.6cm, anchor=center] at ([xshift=\colx cm, yshift=-2.15cm]gov.center) {\n.\ \s};
 }
 
 % ===== 右：产物 =====
-\node[box={cgreen}{bggreen}, align=center] (out) at (14.4,0) {\textbf{训练就绪数据}\\[2pt]
+\node[box={cgreen}{bggreen}, align=center] (out) at (16.2,1.4) {\textbf{训练就绪数据}\\[2pt]
 {\footnotesize \texttt{data/processed} + \texttt{data/manifests}}};
 
 \node[block={cgreen}{bggray}, align=left, below=10pt of out.south] (out-p) {\footnotesize\textbf{Parquet 分片}\\
@@ -61,15 +68,15 @@ train / validation / test\\
 行数、token 数、切分策略};
 
 % ===== 下：下游阶段 =====
-\node[box={cpurple}{bgpurple}, align=center] (down) at (7.2,-6.2) {\textbf{下游阶段（后续教程）}\\[2pt]
+\node[box={cpurple}{bgpurple}, align=center] (down) at (7.2,-2.9) {\textbf{下游阶段（后续教程）}\\[2pt]
 {\footnotesize 预训练 $\rightarrow$ CPT $\rightarrow$ SFT $\rightarrow$ RM/DPO $\rightarrow$ GRPO $\rightarrow$ VLM $\rightarrow$ 评测 $\rightarrow$ 量化 $\rightarrow$ 部署}};
 
-% ===== 箭头 =====
-\draw[cred, ->, thick] (raw-train.east) -- node[above, font=\footnotesize]{治理} (gov.west);
-\draw[cred, ->, thick] (raw-eval.east) -- node[above, font=\footnotesize]{仅记录} (gov.west);
+% ===== 箭头（折线：先垂直后水平，避免穿过下方步骤网格） =====
+\draw[cred, ->, thick] (raw-train.east) |- node[above, font=\footnotesize]{治理} (gov.west);
+\draw[cred, ->, thick, dashed] (raw-eval.east) |- node[above, font=\footnotesize]{仅记录} ([yshift=-8pt]gov.west);
 \draw[cblue, ->, thick] (gov.east) -- node[above, font=\footnotesize]{产物} (out.west);
 \draw[cgreen, ->, thick] (out.south) -- node[right, font=\footnotesize]{消费} (down.east);
-\draw[cblue, ->, thick, dashed] (gov.south) -- node[right, font=\footnotesize]{流水线可复用} (down.north);
+\draw[cblue, ->, thick, dashed] ([yshift=-30pt]gov.south) -- node[right, font=\footnotesize]{流水线可复用} (down.north);
 
 \end{tikzpicture}
 \end{document}

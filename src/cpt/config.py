@@ -29,6 +29,8 @@ class ModelConfig:
             raise ValueError("model.path must not be empty")
         if self.seq_len < 8:
             raise ValueError("model.seq_len must be >= 8")
+        if self.seq_len > 32768:
+            raise ValueError("model.seq_len must be <= 32768 (Qwen3 context limit)")
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,7 @@ class DataConfig:
     runs_root: str
     logs_root: str
     reports_root: str
+    source_corpus: str = "tigerbot-law"
 
     def __post_init__(self) -> None:
         if not self.domain_corpus:

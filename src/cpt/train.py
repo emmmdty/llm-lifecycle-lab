@@ -59,6 +59,7 @@ def generate_text(
     outputs = []
     for prompt in prompts:
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        model.eval()
         with torch.no_grad():
             generated = model.generate(
                 **inputs,
@@ -68,6 +69,7 @@ def generate_text(
                 top_k=None if greedy else top_k,
                 pad_token_id=eos_id,
             )
+        model.train()
         ids = generated[0][inputs["input_ids"].shape[1]:]
         outputs.append(tokenizer.decode(ids, skip_special_tokens=True))
     return outputs
@@ -284,9 +286,8 @@ class CptTrainer:
                 )
             self.metrics.append(entry)
             self._append_metrics(entry)
-            if tc.ckpt_every and (
-                self.global_step % tc.ckpt_every == 0
-                or self.global_step >= max_steps
+            if self.global_step >= max_steps or (
+                tc.ckpt_every and self.global_step % tc.ckpt_every == 0
             ):
                 self.save_checkpoint(f"step-{self.global_step}")
             if self.global_step % tc.log_every == 0 or self.global_step >= max_steps:
@@ -297,10 +298,15 @@ class CptTrainer:
         self._log_summary()
 
     def _mfu_for(self, tokens: int, seconds: float) -> float | None:
-        """MFU of a train step: full base forward+backward FLOPs (12ND) vs peak."""
+        """MFU of a train step: frozen-base LoRA forward+backward FLOPs (4ND) vs peak.
+
+        The base is frozen, so backward only propagates input gradients
+        (2N/token); weight gradients for the base are not computed (2N saved).
+        Adapter weight gradients are negligible vs the base FLOPs.
+        """
         if self.device.type != "cuda":
             return None
-        flops = 12.0 * self.base_param_count * tokens
+        flops = 4.0 * self.base_param_count * tokens
         return compute_mfu(flops, self.config.train.peak_flops, seconds)
 
     def validate(self) -> dict[str, dict[str, float | int]]:
@@ -378,7 +384,7 @@ class CptTrainer:
             raise ValueError(f"{checkpoint}: unsupported checkpoint format")
         if payload.get("config") != asdict(self.config):
             raise ValueError(
-                f"{checkpoint}: config mismatch with resolved training config"
+                f"{checkpoint}: config mismatch with resolved training config (resume requires the exact same config; CLI overrides are not supported)
             )
         dc = self.config.data
         current_streams = {

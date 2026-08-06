@@ -172,7 +172,12 @@ def stream_meta(
         "tokenizer": {
             "name": tokenizer_name,
             "vocab_size": tokenizer_vocab,
-            "revision": source_manifest.get("tokenizer_revision"),
+            "revision": (
+                source_manifest.get("tokenizer_revision")
+                or f"models/Qwen3-0.6B-Base"
+                if tokenizer_name == "qwen3"
+                else "artifacts/tokenizers/"
+            ),
         },
         "special_ids": special_ids,
         "docs": docs,

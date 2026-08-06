@@ -218,9 +218,8 @@ class Trainer:
                 )
             self.metrics.append(entry)
             self._append_metrics(entry)
-            if tc.ckpt_every and (
-                self.global_step % tc.ckpt_every == 0
-                or self.global_step >= max_steps
+            if self.global_step >= max_steps or (
+                tc.ckpt_every and self.global_step % tc.ckpt_every == 0
             ):
                 self.save_checkpoint(f"step-{self.global_step}")
             if self.global_step % tc.log_every == 0 or self.global_step >= max_steps:
@@ -297,7 +296,7 @@ class Trainer:
             raise ValueError(f"{checkpoint}: unsupported checkpoint format")
         if payload.get("config") != asdict(self.config):
             raise ValueError(
-                f"{checkpoint}: config mismatch with resolved training config"
+                f"{checkpoint}: config mismatch with resolved training config (resume requires the exact same config; CLI overrides are not supported)
             )
         stream = payload.get("stream") or {}
         tc = self.config.train

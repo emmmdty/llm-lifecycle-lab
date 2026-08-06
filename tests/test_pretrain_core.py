@@ -243,7 +243,8 @@ def test_encode_doc_and_stream_roundtrip(tmp_path: Path) -> None:
 def test_block_sampler_deterministic_and_resumable() -> None:
     sampler = BlockSampler(100_000, 512, seed=42)
     first = sampler.offsets(20)
-    assert all(0 <= offset <= 100_000 - 512 for offset in first)
+    # label shift reads stream[o+1:o+seq_len+1], so max offset is len-seq_len-1
+    assert all(0 <= offset <= 100_000 - 512 - 1 for offset in first)
     state = sampler.state()
     second = sampler.offsets(20)
     assert second != first
@@ -251,8 +252,8 @@ def test_block_sampler_deterministic_and_resumable() -> None:
     resumed.offsets(20)
     resumed.set_state(state)
     assert resumed.offsets(20) == second
-    exact = BlockSampler(512, 512, seed=1)
-    assert exact.offsets(3) == [0, 0, 0]
+    with pytest.raises(ValueError):
+        BlockSampler(512, 512, seed=1)  # needs seq_len+1 tokens for label shift
     with pytest.raises(ValueError):
         BlockSampler(100, 512, seed=1)
 
@@ -261,10 +262,12 @@ def test_validation_offsets_deterministic() -> None:
     first = validation_offsets(100_000, 512, 100, seed=1234)
     second = validation_offsets(100_000, 512, 100, seed=1234)
     assert first == second
-    assert all(0 <= offset <= 100_000 - 512 for offset in first)
+    assert all(0 <= offset <= 100_000 - 512 - 1 for offset in first)
     assert len(first) == 100
     with pytest.raises(ValueError):
         validation_offsets(100, 512, 5, seed=1)
+    with pytest.raises(ValueError):
+        validation_offsets(512, 512, 5, seed=1)
 
 
 def test_softmax_and_top_k() -> None:

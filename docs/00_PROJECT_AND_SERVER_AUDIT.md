@@ -431,3 +431,24 @@ logs/sft/*.log                   bench/formal/compare/resume 日志
 - **失败与未完成**：tiny 生成退化未解决（容量限制，非训练 bug）；QLoRA NF4 基座 merge 有损（已给出正确流程）；TRL SFTTrainer 未做完整集成验证（仅 import + 决策记录）。
 
 阶段 8 可执行条件：SFT 管线（messages→template→mask 流→训练→eval→merge）已就绪；RM 阶段直接消费 ultrafeedback_binarized（prompt 分组治理产物已在阶段 2 完成）。
+
+## 2026-08-06 补充：阶段 0-7 代码审查与修复
+
+2026-08-06 对阶段 0-7 全部代码做了一次 subagent code review，修复以下问题（git 记录见对应 commit）：
+
+| # | 严重度 | 问题 | 修复 |
+| --- | --- | --- | --- |
+| 1 | 严重 | `BlockSampler`/`validation_offsets` 上界差一（off-by-one）：offset 可取到 `stream_len - seq_len`，label 切片 `stream[o+1:o+seq_len+1]` 越界 1 元素，numpy memmap 静默截断后 `np.stack` 随机崩溃 | 最大 offset 改为 `stream_len - seq_len - 1`；构造守卫改为 `stream_len <= seq_len` 时报错（label shift 需 seq_len+1 个 token）；测试同步更新 |
+| 2 | 中等 | LoRA/QLoRA 的 MFU 用 12ND 虚高 2-3 倍（冻结 base 无 dW，实际约 4ND/token） | `cpt/train.py`、`sft/train.py` 改为 4ND（PEFT）/ 6ND（Full-SFT）；`cpt/lora.py` 的 FLOP 注释与 `estimate_cpt_flops` 同步修正；历史报告的 MFU 数字为旧口径，以本文档为准 |
+| 3 | 中等 | `pretrain/run.py` main 先 `_setup_logging(None)` 再 `cmd_train` 二次 `basicConfig` 静默 no-op，训练日志文件为空 | 与 cpt/sft 一致：`command != "train"` 时才预置 logging |
+| 4 | 中等 | merge-check 的合并前生成在 train 模式运行（dropout 激活），`generation_exact_match` 不可信 | `generate_conversation`/`generate_text` 生成前 `model.eval()`、生成后 `model.train()` |
+| 5 | 建议 | govern official 策略 budget+token_cap 同时设置时 cap 覆盖 budget | 先 budget 裁剪再对裁剪结果 cap |
+| 6 | 建议 | resume 与 CLI override 冲突时报错不友好 | 错误信息补充"resume requires the exact same config; CLI overrides are not supported" |
+| 7 | 建议 | `ckpt_every=0` 时连最终 checkpoint 都不存（违反"必须支持 resume"） | 三处训练器最终 checkpoint 无条件保存 |
+| 8 | 建议 | Embedding 初始化覆盖 `padding_idx` 零值 | 初始化后对 `padding_idx` 行显式清零 |
+| 9 | 建议 | cpt `ModelConfig` 未校验 Qwen3 上下文上限、source_corpus 硬编码、sft tokenizer revision 恒为 None、死代码 `merge_adapter` | 补校验；`source_corpus` 移入配置（默认值保持兼容）；revision 回退到模型路径说明；删除死代码 |
+| 10 | 轻微 | pretrain `generate()` 的窗口化分支是死代码、group_by 截断无对账计数、govern reader 按 suffix 而非 spec.reader 分派 | 已记录，未改（行为无影响；generation 窗口化留待阶段 12 专门处理） |
+
+审查结论：数据泄漏防护（cpt 按 document / sft 按 prompt 分组切分）、grad_accum 归一化、checkpoint resume 的 sampler/RNG 恢复、SFT assistant-mask 移位语义、QLoRA adapter-only checkpoint 恢复、cpt/sft eval 与 train validate 的一致性——均未发现问题。
+
+**MFU 口径说明（重要）**：阶段 4/5 小模型（全参训练）MFU 用 6ND，口径正确不变。阶段 6/7 的 LoRA/QLoRA 报告 MFU 原按 12ND 计算（虚高约 2-3 倍），本次修正为 4ND 口径；`runs/` 内历史 run.json 的 `mfu` 字段未重算，解读时乘以约 1/3（LoRA 4ND/12ND）才是 4ND 口径数值。docs/06 Q10 的小模型 MFU 数据（5M=3.4% 等）为全参训练，不受影响。

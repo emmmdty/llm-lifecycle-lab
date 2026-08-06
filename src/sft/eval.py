@@ -206,10 +206,3 @@ def generate_all(
         )[0]
         for prompt in prompts
     ]
-
-
-def merge_adapter(model: Any, adapter_dir: str):
-    """merge_and_unload; returns (merged_model, adapter_backup) for round-trip checks."""
-    merged = model.merge_and_unload()
-    merged.eval()
-    return merged

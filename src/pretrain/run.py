@@ -451,7 +451,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     generate.set_defaults(func=cmd_generate)
 
     args = parser.parse_args(argv)
-    if args.command != "train" or not args.dry_run:
+    if args.command != "train":
         _setup_logging(None)
     return args.func(args)
 

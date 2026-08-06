@@ -6,7 +6,7 @@
 
 ---
 
-# 第一部分 前置理论：Tokenizer 基础知识
+## 第一部分 前置理论：Tokenizer 基础知识
 
 ## 1. 为什么需要 tokenizer？
 
@@ -165,7 +165,7 @@ embedding + LM head 参数量 = 2 × vocab_size × hidden_size
 
 ---
 
-# 第二部分 阶段 3 实验：训练自己的 BPE
+## 第二部分 阶段 3 实验：训练自己的 BPE
 
 ## 2. 实验设计
 

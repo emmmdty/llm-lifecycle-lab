@@ -133,6 +133,7 @@ def generate_conversation(
             enable_thinking=False,
         )
         inputs = tokenizer(text, return_tensors="pt").to(device)
+        model.eval()
         with torch.no_grad():
             generated = model.generate(
                 **inputs,
@@ -142,6 +143,7 @@ def generate_conversation(
                 top_k=None if greedy else top_k,
                 pad_token_id=eos_id,
             )
+        model.train()
         ids = generated[0][inputs["input_ids"].shape[1] :]
         outputs.append(tokenizer.decode(ids, skip_special_tokens=True))
     return outputs
@@ -430,8 +432,8 @@ class SftTrainer:
                 entry["peak_mem_gb"] = torch.cuda.max_memory_allocated() / (1024**3)
             self.metrics.append(entry)
             self._append_metrics(entry)
-            if tc.ckpt_every and (
-                self.global_step % tc.ckpt_every == 0 or self.global_step >= max_steps
+            if self.global_step >= max_steps or (
+                tc.ckpt_every and self.global_step % tc.ckpt_every == 0
             ):
                 self.save_checkpoint(f"step-{self.global_step}")
             if self.global_step % tc.log_every == 0 or self.global_step >= max_steps:
@@ -442,10 +444,19 @@ class SftTrainer:
         self._log_summary()
 
     def _mfu_for(self, tokens: int, seconds: float) -> float | None:
-        """MFU: full forward+backward FLOPs (12ND for full model, 12N over the base for PEFT)."""
+        """MFU: full model 6ND (tiny Full-SFT) or frozen-base LoRA 4ND (PEFT) vs peak.
+
+        Full-SFT updates every weight: 2N forward + 4N backward = 6N/token.
+        LoRA/QLoRA freezes the base: backward computes only input gradients
+        (2N/token), no base weight gradients, so ~4N/token (adapter grads
+        negligible vs base FLOPs).
+        """
         if self.device.type != "cuda":
             return None
-        flops = 12.0 * self.base_param_count * tokens
+        flops_per_token = (
+            6.0 if not self.config.is_peft else 4.0
+        )
+        flops = flops_per_token * self.base_param_count * tokens
         return compute_mfu(flops, self.config.train.peak_flops, seconds)
 
     def validate(self) -> dict[str, dict[str, float | int]]:
@@ -530,7 +541,7 @@ class SftTrainer:
         if payload.get("format") != CHECKPOINT_FORMAT:
             raise ValueError(f"{checkpoint}: unsupported checkpoint format")
         if payload.get("config") != asdict(self.config):
-            raise ValueError(f"{checkpoint}: config mismatch with resolved training config")
+            raise ValueError(f"{checkpoint}: config mismatch with resolved training config (resume requires the exact same config; CLI overrides are not supported))
         dc = self.config.data
         current_stream = {
             "corpus": dc.corpus,

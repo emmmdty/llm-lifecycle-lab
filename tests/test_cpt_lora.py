@@ -70,7 +70,8 @@ def test_recommend_rank_validation() -> None:
 
 def test_flops_and_wall_time() -> None:
     flops = estimate_cpt_flops(596_049_920, 5_000_000, 3)
-    assert flops == pytest.approx(12 * 596_049_920 * 5_000_000 * 3)
+    # frozen-base LoRA: forward 2N + backward(dX only) 2N = 4N per token
+    assert flops == pytest.approx(4 * 596_049_920 * 5_000_000 * 3)
     seconds = estimate_wall_time(flops, 380e12, 0.10)
     assert seconds > 0
     assert seconds < 2 * 3600

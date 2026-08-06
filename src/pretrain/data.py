@@ -81,12 +81,19 @@ def open_stream_memmap(path: Path, dtype: str = "i"):
 
 
 class BlockSampler:
-    """Seeded random block offsets within a token stream; state is resumable."""
+    """Seeded random block offsets within a token stream; state is resumable.
+
+    A block at offset ``o`` reads input ``stream[o:o+seq_len]`` and its
+    label-shifted target ``stream[o+1:o+seq_len+1]``, so the stream must have
+    at least ``seq_len + 1`` tokens and the largest valid offset is
+    ``stream_len - seq_len - 1``.
+    """
 
     def __init__(self, stream_len: int, seq_len: int, seed: int) -> None:
-        if stream_len < seq_len:
+        if stream_len <= seq_len:
             raise ValueError(
-                f"stream_len {stream_len} must be >= seq_len {seq_len}"
+                f"stream_len {stream_len} must be > seq_len {seq_len} "
+                "(label shift needs one extra token)"
             )
         self.stream_len = stream_len
         self.seq_len = seq_len
@@ -94,7 +101,7 @@ class BlockSampler:
         self.rng = random.Random(seed)
 
     def offsets(self, count: int) -> list[int]:
-        high = self.stream_len - self.seq_len
+        high = self.stream_len - self.seq_len - 1
         return [self.rng.randint(0, high) for _ in range(count)]
 
     def state(self) -> object:
@@ -105,10 +112,13 @@ class BlockSampler:
 
 
 def validation_offsets(stream_len: int, seq_len: int, count: int, seed: int) -> list[int]:
-    if stream_len < seq_len:
-        raise ValueError(f"stream_len {stream_len} must be >= seq_len {seq_len}")
+    if stream_len <= seq_len:
+        raise ValueError(
+            f"stream_len {stream_len} must be > seq_len {seq_len} "
+            "(label shift needs one extra token)"
+        )
     rng = random.Random(seed)
-    high = stream_len - seq_len
+    high = stream_len - seq_len - 1
     return [rng.randint(0, high) for _ in range(count)]
 
 
