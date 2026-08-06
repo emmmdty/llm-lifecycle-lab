@@ -23,6 +23,7 @@ from .eval import (
 )
 from .prep import prepare_sft_corpus
 from .train import SftTrainer, load_base_model
+from pretrain.analyze import diversity_stats
 from pretrain.record import build_run_record, gather_environment, gather_hardware, git_head
 
 log = logging.getLogger("sft")
