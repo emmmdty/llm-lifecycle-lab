@@ -122,8 +122,15 @@ def generate_conversation(
             model.train()
             continue
         messages = [{"role": "user", "content": prompt}]
+        # Qwen3 chat template inserts an empty <think></think> block for the
+        # final assistant turn when the full conversation is rendered (training
+        # framing).  Rendering the generation prompt with enable_thinking=False
+        # reproduces exactly that prefix, keeping train/eval framing identical.
         text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
         inputs = tokenizer(text, return_tensors="pt").to(device)
         with torch.no_grad():
