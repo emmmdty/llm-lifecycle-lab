@@ -541,7 +541,8 @@ class SftTrainer:
         if payload.get("format") != CHECKPOINT_FORMAT:
             raise ValueError(f"{checkpoint}: unsupported checkpoint format")
         if payload.get("config") != asdict(self.config):
-            raise ValueError(f"{checkpoint}: config mismatch with resolved training config (resume requires the exact same config; CLI overrides are not supported))
+            raise ValueError(f"{checkpoint}: config mismatch with resolved training config "
+                "(resume requires the exact same config; CLI overrides are not supported)")
         dc = self.config.data
         current_stream = {
             "corpus": dc.corpus,
