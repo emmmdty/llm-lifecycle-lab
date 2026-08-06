@@ -245,6 +245,10 @@ Codex 不得在 smoke test 后自动开始正式训练。
 - LoRA 合并前后输出一致；
 - 比较 Full、LoRA、QLoRA 显存和速度。
 
+### 完成状态（2026-08-06）
+
+阶段 7 已完成：SFT 数据准备（中文 alpaca-gpt4-zh + 英文 alpaca-cleaned 均按 prompt 分组切分，token+assistant-mask 流 + manifest）、三实验（tiny Full-SFT / Qwen3 LoRA r8 / Qwen3 QLoRA r8 NF4）、assistant-only loss、packing、checkpoint/resume、merge 一致性、Full vs LoRA vs QLoRA 资源对比。全部验收项证据见 docs/00「阶段 7」补充、reports/stage7-eval-summary.json、runs/20260806-082602（tiny）/ 20260806-082619（LoRA）/ 20260806-083036（QLoRA）；Q16–Q20 登记见 docs/06；真实问题（QLoRA NF4 merge 有损、Qwen3 空 think 块、小模型生成退化）记录在教程 05。
+
 ---
 
 ## 阶段 8：Reward Model

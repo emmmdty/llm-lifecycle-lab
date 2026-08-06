@@ -6,16 +6,18 @@ English summary: this repository is a staged learning lab for the LLM lifecycle,
 
 ## 当前阶段
 
-项目已完成数据治理（阶段 2）、tokenizer（阶段 3）、TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）、Wikitext 正式教学预训练（阶段 5，Q1 缩放实验 + Q2 决策 + 80M token 正式训练）和 Qwen3 CPT（阶段 6，rank-2 LoRA 573K 可训练参数、tigerbot-law 3.91M domain token、domain ppl -31.6%、通用无退化、7.4 分钟完成）。当前执行阶段 7（SFT）的开发准备。
+项目已完成数据治理（阶段 2）、tokenizer（阶段 3）、TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）、Wikitext 正式教学预训练（阶段 5，Q1 缩放实验 + Q2 决策 + 80M token 正式训练）、Qwen3 CPT（阶段 6，rank-2 LoRA 573K 可训练参数、tigerbot-law 3.91M domain token、domain ppl -31.6%、通用无退化、7.4 分钟完成）和 SFT（阶段 7，tiny Full-SFT + Qwen3 LoRA/QLoRA-SFT 双实验、assistant-only loss、prompt 分组数据、merge 一致性、Full vs LoRA vs QLoRA 资源对比）。当前执行阶段 8（Reward Model）的开发准备。
 
-阶段 6 停止条件已满足：
+阶段 7 停止条件已满足：
 
-- 本地单元测试通过（85 passed + 1 skipped，torch-free 核心逻辑全测，服务器 96 passed）；
-- 服务器按顺序完成 dry-run、单 batch、5 step smoke、150 step 基准（30K tokens/s、MFU 49.8%）、resume 连续性验证与人工确认后正式训练；
-- domain perplexity 7.015 → 4.795（-31.6%），通用退化被量化（identical-framing 下无退化，框架诊断见 reports/cpt-framing-diagnostic.json）；
-- adapter 重载往返一致（重载 ppl vs 训练末次 val 差异 ~1e-3，BF16 最后一位非确定性）；
-- 正式训练 446.5 秒（7.4 分钟），远低于 3 小时预算；
-- command/config/environment/hardware/revision/seed/metrics 全部记录在 `runs/` 与 `reports/`。
+- 本地单元测试通过（107 passed + 1 skipped，torch-free 核心逻辑全测，服务器 117 passed）；
+- 服务器按顺序完成 dry-run、5 step smoke、150 step 基准（含 resume 连续性）、人工确认后正式训练；
+- 数据：中文 alpaca-gpt4-zh 与英文 alpaca-cleaned（cc-by-4.0）均按 prompt 分组切分，test 排除，token+assistant-mask 流 + manifest；
+- held-out assistant-only loss 下降：tiny -43.5%（6.41→3.62）、LoRA -14.3%（2.13→1.83）、QLoRA -11.5%（2.13→1.88）；
+- 固定 50 prompt 前后对比（reports/sft-compare-*.json）；LoRA merge 前后一致（BF16 基座），QLoRA 需去量化后 merge（PEFT 已知警告）；
+- Full vs LoRA vs QLoRA 峰值显存 3.59 / 14.13 / 7.43GB，tokens/s 668K / 29.1K / 18.5K；
+- 正式训练合计约 11 分钟，远低于 8h 上限；command/config/environment/hardware/revision/seed/metrics 全部记录在 `runs/` 与 `reports/`；
+- 诚实记录：tiny 18.1M SFT 后生成退化（容量限制，Q19）；QLoRA NF4 基座 merge 有损的正确流程（Q18）。
 
 ## 本地与服务器职责
 

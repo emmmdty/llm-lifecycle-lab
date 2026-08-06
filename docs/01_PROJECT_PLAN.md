@@ -202,6 +202,8 @@ AI-ModelScope/alpaca-gpt4-data-zh
 - assistant-only loss；
 - Full、LoRA、QLoRA 的区别。
 
+2026-08-06 补充：中文 alpaca-gpt4-zh 用于 Qwen3 LoRA/QLoRA-SFT（语言匹配）；另下载英文 alpaca-cleaned（cc-by-4.0，44MB）用于小模型 Full-SFT（小模型为英文预训练，语言匹配决策见 docs/06 Q16）。两者均按 user prompt 分组切分防跨 split 泄漏，治理 test 不进入训练。
+
 ### 4.4 Reward Model 和 DPO
 
 使用：

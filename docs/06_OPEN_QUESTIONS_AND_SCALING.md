@@ -174,3 +174,37 @@ README 事实（2026-08-05 核实）：
 | Q13 | 深窄 vs 宽浅（MobileLLM；本项目 hidden=512 处于 d_model<512 劣势边界） | 阶段 5 | 未验证（5M 为深窄 h=128×15 层、18M/64M 为 h=512，规模不同不可直接对照；留待专门实验） |
 | Q14 | 跨 tokenizer 效果评价改用 BPB（Bits Per Byte） | 阶段 5/12 | 待验证（阶段 5 记录了相关事实：32k BPE 编码 Wikitext 得 92.3M token vs manifest 16k 估算 80M，byte-level BPE 对 wiki 标记文本的压缩率低于普通英文） |
 | Q15 | D≈20N 决策方法扩展到 LoRA-CPT 可训练参数量 | 阶段 6 | ✅ 已验证（rank 2=573,440 匹配 seen 读法 3D/20≈587K（0.98×）；unique 读法放宽 2.9×；详见第 2 节 Q2 延伸） |
+| Q16 | 小模型 SFT 数据语言匹配（英文 vs 中文） | 阶段 7 | ✅ 已决策并验证（小模型用英文 alpaca-cleaned，Qwen3 用中文 alpaca-gpt4-zh；详见第 2 节 Q16） |
+| Q17 | QLoRA NF4 在 Blackwell sm_120 上的可行性与显存 | 阶段 7 | ✅ 已验证（bitsandbytes 0.50.0 NF4 在 RTX 5090 可用，峰值显存 7.43GB；详见第 2 节 Q17） |
+| Q18 | QLoRA adapter merge 到 NF4 基座的一致性 | 阶段 7 | ✅ 已验证（merge 进 NF4 基座有损 ppl 6.65→8.88（PEFT 官方警告）；去量化到 BF16 后 merge 一致，loss 差 2.1e-4、生成 10/10；详见第 2 节 Q18） |
+| Q19 | 小模型（18.1M）SFT 后的生成退化现象 | 阶段 7 | ✅ 已记录（held-out assistant loss -43.5% 但生成退化到 `*` 重复；18M 容量不足以学指令遵循，诚实记录；详见第 2 节 Q19） |
+| Q20 | chat template 对 SFT 训练/评测口径的影响（Qwen3 空 think 块） | 阶段 7 | ✅ 已验证（训练时模板对最后一条 assistant 消息插空 `<think>\n\n</think>\n\n`；生成时需 enable_thinking=False 才能对齐，否则产生前缀噪声；详见第 2 节 Q20） |
+
+## 8. 阶段 7 SFT 决策与验证记录
+
+### Q16：小模型 SFT 数据语言匹配（✅ 2026-08-06 已决策并验证）
+
+小模型（TinyStories/Wikitext 预训练，英文 BPE）与 Qwen3（中英双语）的 SFT 数据语言必须匹配：
+
+| 实验 | SFT 数据 | 语言 | 理由 |
+| --- | --- | --- | --- |
+| tiny Full-SFT | alpaca-cleaned（英文，cc-by-4.0，44MB 新下载） | 英文 | 小模型 tokenizer 只见过英文，中文 token 化碎片化严重（实测 8 字→30 token vs 7 词→7 token） |
+| Qwen3 LoRA/QLoRA | alpaca-gpt4-zh（中文，CC BY-NC 4.0，治理产物） | 中文 | Qwen3 预训练含中文，与阶段 6 CPT 领域一致 |
+
+英文数据选择 alpaca-cleaned（yahma 清洗版）而非合成指令：真实指令数据、许可清晰（cc-by-4.0）、规模可控（44MB 单文件，治理后 12K/1.5K/1.5K）。合成指令方案记录为备选（数据真实性差，不推荐）。
+
+### Q17：QLoRA NF4 on Blackwell sm_120（✅ 2026-08-06 已验证）
+
+bitsandbytes 0.50.0 + transformers 5.14.1 在 RTX 5090（sm_120）上 NF4 4-bit 基座 + LoRA 训练可用：dry-run、5 step smoke、150 step bench、222 step 正式训练全部通过，峰值显存 7.43GB（vs LoRA BF16 基座 14.13GB，节省 ~47%）。性能代价：tokens/s 27.9K→19.0K（-32%），MFU 0.548→0.220（NF4 反量化开销）。
+
+### Q18：QLoRA merge 到 NF4 基座有损（✅ 2026-08-06 已验证，PEFT 已知警告）
+
+`merge_and_unload` 直接作用在 NF4 基座上会把 LoRA 权重再量化进 4-bit，产生精度损失：held-out assistant ppl 6.65→8.88（PEFT 源码警告 "may get different generations due to rounding errors"）。正确流程：**先加载 BF16 基座 → 挂 adapter → merge**，此时 loss 差 2.1e-4、生成 10/10 一致（与 BF16 LoRA 的 3.3e-4/5/5 同量级）。这是 QLoRA 落地的真实坑，教程已记录。
+
+### Q19：小模型 SFT 生成退化（✅ 2026-08-06 已记录）
+
+18.1M TinyStories 模型 Full-SFT（英文 alpaca，3 epoch）后：held-out assistant loss 6.41→3.62（-43.5%），但 greedy 生成退化为 `*`（token 13）重复循环。原因分析：18M 参数容量不足以学指令遵循格式（对比 Qwen3 LoRA 同数据规模 ppl 8.40→6.20 且生成质量明显提升），且 TinyStories 预训练分布与 alpaca 指令分布差异大。诚实记录：小模型 SFT 的 loss 下降不等于生成质量提升；Full-SFT 教学价值（优化器/scheduler/resume/assistant-only loss 全链路）已达成。
+
+### Q20：Qwen3 chat template 空 think 块对训练/评测口径的影响（✅ 2026-08-06 已验证）
+
+Qwen3 官方 chat template 对**最后一条 assistant 消息**无条件插入空 `<think>\n\n</think>\n\n` 块（训练数据如此渲染）。但 `add_generation_prompt=True` 的生成前缀默认**不包含**该块——若不显式 `enable_thinking=False`，训练与生成的前缀分布不一致，模型会在答案前产生噪声前缀（实测出现泰文乱码）。修复：生成时 `apply_chat_template(..., add_generation_prompt=True, enable_thinking=False)`，与训练口径完全对齐。SFT 评测（held-out assistant loss）因使用同一模板+同一 mask 不受影响。

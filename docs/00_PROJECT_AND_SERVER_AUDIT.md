@@ -378,4 +378,56 @@ logs/cpt/*.log
 - 解决：`uv pip install ziglang` + `.venv-train/bin/zig-cc` 包装器（`zig cc`，把 `-l:libcuda.so.1` 译为绝对路径输入）；`uv python install 3.12` 获取带头文件的 CPython，`.triton-cc/sitecustomize.py` 重定向 sysconfig include（该目录已在服务器 `.git/info/exclude` 忽略，不进 Git）；`libcuda.so.1` 复制进 triton nvidia lib 目录。triton cuda_utils 一次性编译成功并缓存。
 - `uv pip check` 通过；freeze 已更新（reports/5090-train-freeze.txt）。
 
-阶段 7 可执行条件：LoRA-CPT 管线（prep/train/eval/compare）与 Qwen 模型加载经验已就绪；SFT 直接复用本阶段 adapter 机制与 tokenizer。
+## 2026-08-06 补充：阶段 7 SFT 完成
+
+阶段 7 在 5090 上完成：SFT 数据准备（中文 + 英文 prompt 分组）、三实验训练（tiny Full-SFT / Qwen3 LoRA / Qwen3 QLoRA）、assistant-only loss、packing、resume、merge 一致性、Full vs LoRA vs QLoRA 资源对比。
+
+### 新增服务器资产
+
+```text
+data/processed/alpaca-sft-zh/     中文 SFT（source: alpaca-gpt4-zh）
+  tokens/qwen3/train.bin + train.mask.bin（15,389 docs / 2,432,864 token）
+  tokens/qwen3/validation.bin + validation.mask.bin（811 docs / 129,624 token）
+  prompts-50.json（固定对比 prompt，seed 2026，来自 val）
+data/processed/alpaca-sft-en/     英文 SFT（source: alpaca-cleaned，cc-by-4.0，44MB 新下载）
+  tokens/tinystories-bpe-16k/train.bin + .mask.bin（12,825 docs / 2,825,578 token）
+  tokens/tinystories-bpe-16k/validation.bin + .mask.bin（675 docs / 155,875 token）
+  prompts-50.json
+data/manifests/alpaca-sft-zh.json、alpaca-sft-en.json、alpaca-cleaned.json
+data/processed/alpaca-cleaned/{train,validation,test}.parquet（12K/1.5K/1.5K 治理产物）
+
+runs/smoke7/                     三实验 5-step smoke
+runs/bench7/                     三实验 150-step bench + step-75 resume 连续性验证
+runs/20260806-082602/            tiny Full-SFT 正式（129 步，12.6s，val ppl 37.48）
+runs/20260806-082619/            Qwen3 LoRA-SFT 正式（222 步，250s，val ppl 6.20）
+runs/20260806-083036/            Qwen3 QLoRA-SFT 正式（222 步，393s，val ppl 6.58）
+reports/stage7-eval-summary.json 阶段 7 评测汇总
+reports/sft-eval-*.json          held-out assistant-only loss（before/after）
+reports/sft-compare-{tiny,lora,qlora}.json  固定 50 prompt 前后对比
+reports/sft-merge-*.json         LoRA/QLoRA merge 一致性
+logs/sft/*.log                   bench/formal/compare/resume 日志
+```
+
+### 阶段 7 关键结果
+
+- **数据**：中文 alpaca-gpt4-zh 治理产物按 user prompt 分组重切（train 15,389 / val 811，治理 test 因与 train 有 2 处 prompt 重叠而排除，不进入训练）；英文 alpaca-cleaned 新下载（cc-by-4.0，44MB）治理后按 prompt 分组重切（12,825/675）。两条流均为 token 流 + 并行 int8 assistant-mask 流（1=assistant token）。同一 prompt 不跨 split（分组切分 + 单测验证）。固定 50 prompt 从各自 val 采样（seed 2026，选择规则记录在 manifest）。
+- **小模型语言匹配决策（Q16）**：小模型（英文预训练）用英文 alpaca-cleaned；Qwen3 用中文 alpaca-gpt4-zh（Qwen3 中英双语）。中文在小模型 16k BPE 下 token 化碎片化严重（8 字→30 token vs 7 英文词→7 token）。
+- **LoRA rank 决策**：SFT 学指令遵循（新行为分布）非分布偏移，按领域先例 rank 8（q/k/v/o，2.29M 可训练参数 = base 0.38%），QLoRA 同 rank 对比。
+- **assistant-only loss**：mask 流实现，prompt 段 label=-100（单测验证：prompt token 不产生 loss）。packing 沿用 packed stream + BlockSampler。
+- **三实验（同一脚本、同一 val blocks、同一有效 batch token 口径 32K/step）**：
+
+| 实验 | 训练 token | tokens/s | step/s | 峰值显存 | MFU | held-out assistant loss（before→after） |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny Full-SFT 18.1M | 8.45M | 668K | 0.10 | 3.59GB | 38.2% | 6.41→3.62（-43.5%，ppl 610→37.5） |
+| Qwen3 LoRA r8 | 7.27M | 29.1K | 1.13 | 14.13GB | 54.8% | 2.13→1.83（-14.3%，ppl 8.40→6.20） |
+| Qwen3 QLoRA r8 (NF4) | 7.27M | 18.5K | 1.77 | 7.43GB | 22.0% | 2.13→1.88（-11.5%，ppl 8.40→6.58） |
+
+- **resume 连续性**：三实验均从 step-75 checkpoint 恢复，loss 逐位差异 ≤1.1e-3（BF16 最后一位非确定性，与阶段 4/5/6 一致）。QLoRA checkpoint 只存 adapter 状态（NF4 基座权重不入 checkpoint，resume 时从磁盘重建）。
+- **merge 一致性（Q17/Q18）**：BF16 LoRA merge 前后 held-out loss 差 3.3e-4、生成 5/5 一致；QLoRA merge 进 NF4 基座有损（ppl 6.65→8.88，PEFT 已知警告），**去量化到 BF16 基座后 merge 一致**（loss 差 2.1e-4、生成 10/10）。QLoRA 落地真实坑，已记录。
+- **chat template（Q20）**：Qwen3 模板对最后一条 assistant 消息插空 `<think>\n\n</think>\n\n`；生成时需 `enable_thinking=False` 对齐训练口径，否则产生噪声前缀（实测泰文乱码）。小模型无 chat template，自建 `user: X [EOS] assistant: Y` 文本模板（16k/32k BPE 无角色 token，无法加特殊 token 以免改词表破坏 checkpoint）。
+- **诚实记录（Q19）**：tiny 18.1M Full-SFT 后 held-out loss 大幅下降但生成退化为 `*` 重复（18M 容量不足以学指令遵循；对比 Qwen3 同数据规模生成质量明显提升）。小模型 SFT 的 loss 下降不等于生成质量提升。
+- **GPU 预算**：全部单卡；正式训练合计 12.6s + 250s + 393s ≈ 11 分钟，远低于 8h 上限。
+- **框架**：TRL 1.9.2 SFTTrainer 可导入但未使用（与项目自写 loop 框架约定不一致，且需自定义 mask/checkpoint/MFU）；自写 src/sft/ 沿用阶段 4/5/6 模式（dry-run/max-steps/resume/run.json/metrics.jsonl/checkpoint v1 格式）。
+- **失败与未完成**：tiny 生成退化未解决（容量限制，非训练 bug）；QLoRA NF4 基座 merge 有损（已给出正确流程）；TRL SFTTrainer 未做完整集成验证（仅 import + 决策记录）。
+
+阶段 8 可执行条件：SFT 管线（messages→template→mask 流→训练→eval→merge）已就绪；RM 阶段直接消费 ultrafeedback_binarized（prompt 分组治理产物已在阶段 2 完成）。
