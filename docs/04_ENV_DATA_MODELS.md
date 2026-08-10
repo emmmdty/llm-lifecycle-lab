@@ -145,7 +145,7 @@ modelscope download \
 ### 从零预训练
 
 ```text
-jingyaogong/minimind_dataset（2026-08-10 主线预训练语料候选；pretrain_t2t_mini.jsonl 约 1.2GB / pretrain_t2t.jsonl 约 10GB；Apache-2.0；ModelScope 镜像名称与 revision 在阶段 8 治理时核对）
+gongjy/minimind_dataset（2026-08-10 主线预训练语料；pretrain_t2t.jsonl 实测 8.27GB / pretrain_t2t_mini.jsonl 1.24GB；ModelScope yaml 标注 CC-BY-NC-4.0（HF 标注 Apache-2.0，冲突已记录）；raw 已下载至 data/raw/minimind_dataset，manifest 见 data/manifests/minimind-dataset.json）
 AI-ModelScope/TinyStories
 modelscope/wikitext
 ```
@@ -293,7 +293,7 @@ du -sh models data 2>/dev/null
 
 ### minimind_dataset（2026-08-10 新增）
 
-主线预训练语料候选：pretrain_t2t_mini.jsonl 约 1.2GB / pretrain_t2t.jsonl 约 10GB，Apache-2.0，中文为主；阶段 8 必须按阶段 2 流程重新治理（许可证核对、schema、去重、有界抽样、分组切分 held-out、token 流、manifest），并记录与 minimind 原始用法（直接自回归文本流）的差异。硬盘预算：raw ≤10GB + int32 token 流 ≤16GB + checkpoint ≤16 个 ≈ 合计 ≤32GB。
+主线预训练语料：pretrain_t2t.jsonl 实测 8.27GB（8,468,827 行）/ pretrain_t2t_mini.jsonl 1.24GB（1,270,238 行），schema 统一 `{"text": str}`，zh + en（中文为主）；许可证冲突记录：ModelScope yaml 标注 CC-BY-NC-4.0、HF 标注 Apache-2.0（以更严格者为准）。阶段 8 必须按阶段 2 流程治理（许可证核对、去重、有界抽样、分组切分 held-out、token 流、manifest），并记录与 minimind 原始用法（直接自回归文本流）的差异；Qwen3 tokenizer 抽样外推主文件 ~1.40B tokens（chars/token=1.65），影响规模决策（Q21）。硬盘预算：raw ~9.5GB + int32 token 流 ≤6GB + checkpoint ≤16 个 ≈ 合计 ≤20GB。
 
 ### tigerbot-law-plugin
 

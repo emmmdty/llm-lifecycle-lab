@@ -482,3 +482,24 @@ docs/06 §3 原记"8h 上限约 875M 参数 / 17.5B token"与同文 §4.3"1B/20B
 ### 与经典项目的定位关系（docs/01 §1.1 详细）
 
 MiniMind（产品/复现项目）与动手学 LLM（工具使用教程）与本项目（亲手实现 + 实测证据 + 全链路 + 验收制教学）定位不同，非重复造轮子；差异在"过程证据"（数据治理、缩放律验证、统一评测、量化/部署基准、失败分析）。自我约束：不抄代码、教程每章带实测数据与失败案例、不把"再训一个同规模模型"当作验收目标。
+
+## 2026-08-10 补充：阶段 8 主线预训练 raw 数据准备完成
+
+minimind_dataset（gongjy/minimind_dataset，ModelScope）预训练 raw 已下载至 `data/raw/minimind_dataset`（仅预训练相关文件，未下载 SFT/DPO/RLAIF 等无关文件）：
+
+```text
+pretrain_t2t.jsonl       8,275,074,893 字节（8.27GB），8,468,827 行，sha256 31efc9a6...cc9d ✓
+pretrain_t2t_mini.jsonl  1,241,043,656 字节（1.24GB），1,270,238 行，sha256 6dd6716c...5560c ✓
+README.md / .gitattributes
+```
+
+关键事实：
+
+- schema 统一 `{"text": str}`，zh + en（中文为主）；minimind 原始用法是直接作为 text→next-token 文本流；
+- **许可证冲突**：ModelScope yaml 标注 CC-BY-NC-4.0，HF（jingyaogong/minimind_dataset）标注 Apache-2.0——以更严格者记录，manifest 已注明（data/manifests/minimind-dataset.json）；
+- **规模决策关键事实**：Qwen3 tokenizer 抽样 5000 条（chars/token=1.65），主文件外推 **~1.40B tokens**——低于 200M 模型 D≈20N 所需 4B token；严格 D≈20N 匹配为 ~70M，128M–200M 将处于数据受限区（t/p≈7–11，minimind 先例 t/p≈7.8）。**待用户决策**（docs/06 Q21）；
+- 样本含大量指令/对话风格文本，治理时需检查质量分布；mini 与主文件是否重叠需治理时核对；
+- 下载日志：logs/downloads/prepare_minimind_dataset_20260810-143016.log；manifest：data/manifests/minimind-dataset.json；
+- 硬盘预算更新：主线预训练资产（raw + token 流 + checkpoint）合计 ≤20GB。
+
+数据治理（去重、抽样、held-out 切分、tokenizer 选定、token 流）属阶段 8 正式执行任务，等待规模决策与 tokenizer 决策后进行。

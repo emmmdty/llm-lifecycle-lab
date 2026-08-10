@@ -81,13 +81,13 @@
 
 **主线教学模型（2026-08-10 升级）**：5090 单卡可承载的**尽可能大**的 Decoder-only Transformer。规模不是固定值（64M 只是示例），由三个约束在阶段 8 执行时决策：
 
-1. **时间预算（主约束）**：单次任务默认 ≤8h，可放宽，硬上限 <24h。按项目实测吞吐 ~66 TFLOPS（docs/06 §4.3）与 D≈20N 外推 compute-optimal 上限：8h 内约 **128M**（2.6B token）；放宽至 24h 上限约 **200M**（4B token）。>250M 超出 24h 硬上限，不在本轮范围（需多卡或修改规则，只记录）。
-2. **数据预算（硬盘约束）**：主线预训练语料治理后的 token 数（候选 minimind_dataset pretrain，10GB 级，阶段 8 治理时实测）。D≈20N 下 4B token ≈ 200M；若治理后数据不足，按 Q2 先例降规模匹配或数据受限记录。
-3. **显存（非约束）**：32GB 显存实测可训练 ~1B 级模型（docs/06 §3），200M 级峰值约 6GB。
+1. **数据预算（主约束，2026-08-10 实测后更新）**：主线预训练语料治理后实测 token 数——minimind_dataset pretrain_t2t.jsonl（8.27GB，8,468,827 行）按 Qwen3 tokenizer 抽样外推 **~1.40B tokens**（chars/token=1.65，见 data/manifests/minimind-dataset.json）。D≈20N 下 1.4B tokens ≈ **70M 模型**；200M 需要 4B tokens，当前数据不可达（补充语料会占用硬盘，待用户决策，Q21）。
+2. **时间预算**：单次任务默认 ≤8h，可放宽，硬上限 <24h。按实测吞吐 ~66 TFLOPS（docs/06 §4.3）外推：8h 内 compute-optimal 约 128M（2.6B token）；24h 上限约 200M（4B token）。>250M 超出 24h 硬上限，不在本轮范围。
+3. **显存（非约束）**：32GB 显存实测可训练 ~1B 级模型，200M 级峰值约 6GB。
 
-**决策公式**（沿用 Q1/Q2 已验证框架）：`N = D/20`，再校验 `6·N·D / 66e12 ≤ 时间预算`。
+**决策公式**（沿用 Q1/Q2 已验证框架）：`N = D/20`，再校验 `6·N·D / 实测吞吐 ≤ 时间预算`。
 
-目标区间 **100M–200M**，默认按"尽可能大"规划 **~200M / ~4B token / 单次 ~20h**（放宽理由：用户 2026-08-10 决策）；若阶段 8 数据治理或基准实测吞吐不支持，回落 **~128M / 8h**。最终规模在阶段 8 的 150 步基准后按实测吞吐确定并记录（Q21）。
+候选区间（2026-08-10 实测后）：严格 D≈20N 匹配为 **~70M**（t/p≈20）；接受数据受限（minimind 先例 t/p≈7.8）可上 **128M–200M**（t/p≈7–11，欠训练量化记录）。最终规模在阶段 8 数据治理（选定 tokenizer 实测 token 数）与 150 步基准后确定并记录（Q21）。
 
 候选配置起点（阶段 5 Q1 已验证 65.4M 的放大版，阶段 8 执行时决策）：
 
@@ -151,17 +151,20 @@ Qwen/Qwen3.5-0.8B
 主数据候选：
 
 ```text
-jingyaogong/minimind_dataset（ModelScope 镜像名称与 revision 在阶段 8 治理时核对）
+gongjy/minimind_dataset（ModelScope，2026-08-10 已下载至 data/raw/minimind_dataset）
 ```
 
-已公开信息（docs/06 §4.1 登记）：
+已核实事实（2026-08-10 实测，manifest 见 data/manifests/minimind-dataset.json）：
 
-- Apache-2.0；
-- `pretrain_t2t_mini.jsonl` 约 1.2GB / `pretrain_t2t.jsonl` 约 10GB（主线候选）；
-- 中文为主，适合 100M–200M 级模型预训练；
-- minimind 原始用法是直接当自回归文本流（max_seq_len≈380/768），本项目必须按阶段 2 流程重新治理（许可证核对、schema、去重、有界抽样、按行/document 分组切分 held-out、token 流、manifest），并记录与 minimind 原始用法的差异。
+- 许可证：ModelScope yaml 标注 **CC-BY-NC-4.0**（HF 标注 Apache-2.0，冲突以更严格者记录）；
+- `pretrain_t2t.jsonl` 实测 **8.27GB**、8,468,827 行、sha256 校验通过；`pretrain_t2t_mini.jsonl` 1.24GB、1,270,238 行；
+- schema 统一 `{"text": "..."}`，zh + en（中文为主）；
+- Qwen3 tokenizer 抽样外推主文件 **~1.40B tokens**（chars/token=1.65）；
+- 样本含大量指令/对话风格文本，质量分布需在治理时检查；
+- mini 与主文件是否重叠需在治理时核对去重；
+- minimind 原始用法是直接当自回归文本流（max_seq_len≈380/768），本项目必须按阶段 2 流程重新治理（许可证核对、去重、有界抽样、按行/document 分组切分 held-out、token 流、manifest）。
 
-规模与数据预算由 D≈20N 决策框架在阶段 8 确定（Q21）：200M 目标对应约 4B token（10GB 原始若不足，实测后降规模或数据受限记录）。硬盘预算：raw ≤10GB + int32 token 流 ≤16GB + checkpoint 保留 ≤16 个 ≈ 合计 ≤32GB。
+规模与数据预算由 D≈20N 决策框架在阶段 8 确定（Q21）：实测 ~1.4B tokens 下严格匹配为 ~70M，数据受限可上 128M–200M（t/p≈7–11）。硬盘预算：raw ~9.5GB + int32 token 流 ≤6GB + checkpoint 保留 ≤16 个 ≈ 合计 ≤20GB。
 
 ### 4.2 从零预训练（历史教学数据，保留为教程对比项）
 
@@ -309,7 +312,7 @@ lmms-lab/ChartQA
 |---|---:|
 | TinyStories | 原始数据集或不超过 2GB |
 | Wikitext | 约 0.7GB 磁盘 |
-| 主线预训练（minimind_dataset 子集，阶段 8） | raw ≤10GB + int32 token 流 ≤16GB |
+| 主线预训练（minimind_dataset，阶段 8） | raw ~9.5GB + int32 token 流 ≤6GB |
 | 中文 CPT 文本 | 不超过 1GB |
 | 中文 SFT | 不超过 1GB |
 | UltraFeedback 子集 | 不超过 2GB |
@@ -318,7 +321,7 @@ lmms-lab/ChartQA
 | 处理后 Parquet | 总计尽量不超过 10GB |
 | 主线 checkpoint | 保留 ≤16 个（200M 级每个约 0.4GB） |
 
-主线预训练资产（raw + token 流 + checkpoint）合计控制在 **~32GB 以内**（2026-08-10 用户决策：硬盘为约束，不占用过多）。
+主线预训练资产（raw + token 流 + checkpoint）合计控制在 **~20GB 以内**（2026-08-10 用户决策：硬盘为约束，不占用过多）。
 
 这个项目不需要 TB 级数据。
 
