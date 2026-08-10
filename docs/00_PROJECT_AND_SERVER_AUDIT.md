@@ -473,11 +473,11 @@ docs/06 §3 原记"8h 上限约 875M 参数 / 17.5B token"与同文 §4.3"1B/20B
 
 ### 主线预训练约束与决策（docs/01 §3.1、docs/06 Q21 登记）
 
-- 时间：单次默认 ≤8h（约 128M），可放宽至 <24h（约 200M，放宽理由：用户"尽可能大"决策）；
-- 硬盘：raw ≤10GB + int32 token 流 ≤16GB + checkpoint 保留 ≤16 个，合计 ≤32GB；
+- 时间：单次默认 ≤8h，硬上限 <24h（物理上限：8h → ~128M / 2.6B token；24h → ~200M / 4B token）；
+- 硬盘：raw ~9.5GB + int32 token 流 ≤6GB + checkpoint 保留 ≤16 个，合计 ≤20GB；
 - 显存：非约束（32GB 下 200M 级峰值约 6GB）；
-- 语料候选：minimind_dataset pretrain（Apache-2.0，1.2GB mini / 10GB 主线），须按阶段 2 流程治理；
-- 最终规模在阶段 8 数据治理 + 150 步基准实测吞吐后按 D≈20N × 时间预算决策。
+- 语料：minimind_dataset pretrain（ModelScope 标注 CC-BY-NC-4.0 / HF 标注 Apache-2.0，冲突以更严格者记录），raw 已下载，须按阶段 2 流程治理；
+- **规模决策（2026-08-10 用户确认）**：实测 ~1.40B tokens（Qwen3 口径）→ 严格 D≈20N → **N≈70M**（治理后按选定 tokenizer 实测修正，预期 60M–85M）。
 
 ### 与经典项目的定位关系（docs/01 §1.1 详细）
 
@@ -497,9 +497,9 @@ README.md / .gitattributes
 
 - schema 统一 `{"text": str}`，zh + en（中文为主）；minimind 原始用法是直接作为 text→next-token 文本流；
 - **许可证冲突**：ModelScope yaml 标注 CC-BY-NC-4.0，HF（jingyaogong/minimind_dataset）标注 Apache-2.0——以更严格者记录，manifest 已注明（data/manifests/minimind-dataset.json）；
-- **规模决策关键事实**：Qwen3 tokenizer 抽样 5000 条（chars/token=1.65），主文件外推 **~1.40B tokens**——低于 200M 模型 D≈20N 所需 4B token；严格 D≈20N 匹配为 ~70M，128M–200M 将处于数据受限区（t/p≈7–11，minimind 先例 t/p≈7.8）。**待用户决策**（docs/06 Q21）；
+- **规模决策关键事实与结果**：Qwen3 tokenizer 抽样 5000 条（chars/token=1.65），主文件外推 **~1.40B tokens**——低于 200M 模型 D≈20N 所需 4B token；严格 D≈20N 匹配为 ~70M，128M–200M 将处于数据受限区（t/p≈7–11，minimind 先例 t/p≈7.8）。**2026-08-10 用户确认：严格 D≈20N，N≈70M**（数据受限选项未采用，理由见 docs/01 §3.1 与 docs/06 Q21）；
 - 样本含大量指令/对话风格文本，治理时需检查质量分布；mini 与主文件是否重叠需治理时核对；
 - 下载日志：logs/downloads/prepare_minimind_dataset_20260810-143016.log；manifest：data/manifests/minimind-dataset.json；
 - 硬盘预算更新：主线预训练资产（raw + token 流 + checkpoint）合计 ≤20GB。
 
-数据治理（去重、抽样、held-out 切分、tokenizer 选定、token 流）属阶段 8 正式执行任务，等待规模决策与 tokenizer 决策后进行。
+数据治理（去重、抽样、held-out 切分、tokenizer 选定、token 流）属阶段 8 正式执行任务，等待 tokenizer 决策后进行（规模已决策：~70M，严格 D≈20N）。

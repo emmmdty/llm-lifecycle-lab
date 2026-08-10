@@ -8,7 +8,7 @@
 公开数据
 → 数据检查与切分
 → Tokenizer
-→ 从零预训练（主线模型 100M–200M 级，2026-08-10 升级）
+→ 从零预训练（主线模型 ~70M 级，2026-08-10 升级，D≈20N 严格匹配）
 → Continued Pretraining
 → SFT
 → Reward Model
@@ -27,7 +27,7 @@
 
 ### 1.1 项目定位：与经典项目的差异（2026-08-10 更新）
 
-本项目是 **LLM 全链路教学项目**：以 5090 单卡可负担的最大规模（100M–200M 级主线模型），把数据治理 → Tokenizer → 从零预训练 → CPT → SFT → Reward Model → DPO → GRPO → 多模态 → 统一评测 → 量化 → 部署全链路的**每个环节拆细**：原理 → 最小实现 → 单元测试 → smoke → 基准 → 正式运行 → 验收 → 教程。
+本项目是 **LLM 全链路教学项目**：以 5090 单卡可负担、且与治理后语料严格匹配 D≈20N 的最大规模（~70M 级主线模型，2026-08-10 用户决策）为载体，把数据治理 → Tokenizer → 从零预训练 → CPT → SFT → Reward Model → DPO → GRPO → 多模态 → 统一评测 → 量化 → 部署全链路的**每个环节拆细**：原理 → 最小实现 → 单元测试 → smoke → 基准 → 正式运行 → 验收 → 教程。
 
 与两个经典开源项目的关系（**不是重复造轮子，差异在"过程证据"**）：
 
@@ -81,22 +81,22 @@
 
 **主线教学模型（2026-08-10 升级）**：5090 单卡可承载的**尽可能大**的 Decoder-only Transformer。规模不是固定值（64M 只是示例），由三个约束在阶段 8 执行时决策：
 
-1. **数据预算（主约束，2026-08-10 实测后更新）**：主线预训练语料治理后实测 token 数——minimind_dataset pretrain_t2t.jsonl（8.27GB，8,468,827 行）按 Qwen3 tokenizer 抽样外推 **~1.40B tokens**（chars/token=1.65，见 data/manifests/minimind-dataset.json）。D≈20N 下 1.4B tokens ≈ **70M 模型**；200M 需要 4B tokens，当前数据不可达（补充语料会占用硬盘，待用户决策，Q21）。
+1. **数据预算（主约束，2026-08-10 实测并决策）**：主线预训练语料实测 token 数——minimind_dataset pretrain_t2t.jsonl（8.27GB，8,468,827 行）按 Qwen3 tokenizer 抽样外推 **~1.40B tokens**（chars/token=1.65，见 data/manifests/minimind-dataset.json）。D≈20N 下 1.4B tokens ≈ **70M 模型**（用户 2026-08-10 确认按此决策，不补充语料）。
 2. **时间预算**：单次任务默认 ≤8h，可放宽，硬上限 <24h。按实测吞吐 ~66 TFLOPS（docs/06 §4.3）外推：8h 内 compute-optimal 约 128M（2.6B token）；24h 上限约 200M（4B token）。>250M 超出 24h 硬上限，不在本轮范围。
 3. **显存（非约束）**：32GB 显存实测可训练 ~1B 级模型，200M 级峰值约 6GB。
 
 **决策公式**（沿用 Q1/Q2 已验证框架）：`N = D/20`，再校验 `6·N·D / 实测吞吐 ≤ 时间预算`。
 
-候选区间（2026-08-10 实测后）：严格 D≈20N 匹配为 **~70M**（t/p≈20）；接受数据受限（minimind 先例 t/p≈7.8）可上 **128M–200M**（t/p≈7–11，欠训练量化记录）。最终规模在阶段 8 数据治理（选定 tokenizer 实测 token 数）与 150 步基准后确定并记录（Q21）。
+**规模决策（2026-08-10 用户确认：严格 D≈20N，~70M）**：实测语料 ~1.40B tokens（Qwen3 口径）→ `N = 1.4B/20 ≈ 70M`（治理后按选定 tokenizer 实测修正，预期 60M–85M 区间）。数据受限选项（128M–200M，t/p≈7–11，minimind 先例）经评估未采用：与 minimind 完全同规模同数据会退化为"再训一个 minimind"，且违背项目方法论；~70M 仍满足"64M 以上"并让 D≈20N 保持成立。最终规模在阶段 8 数据治理（选定 tokenizer 实测 token 数）与 150 步基准后确定并记录（Q21）。
 
-候选配置起点（阶段 5 Q1 已验证 65.4M 的放大版，阶段 8 执行时决策）：
+候选配置起点（阶段 5 Q1 已验证 65.4M 的修订版：32k 词表 + seq 1024，阶段 8 执行时决策）：
 
 ```yaml
-vocab_size: 32768（32K 词表；Q12 已实测 65.4M 级 embedding 占比 ~13%，可接受；词表精简对比登记 Q22）
-hidden_size: 768–1024
-num_hidden_layers: 12–16
-num_attention_heads: 12–16
-intermediate_size: 3072–4096
+vocab_size: 32768（32K 词表；Q12 已实测 65.4M 级 embedding 占比 ~13%（16k 词表），32k 需按 Q22 复核占比）
+hidden_size: 512
+num_hidden_layers: 14–18
+num_attention_heads: 8
+intermediate_size: 2048
 max_position_embeddings: 1024
 dtype: bfloat16
 ```
@@ -334,7 +334,7 @@ lmms-lab/ChartQA
 | Wikitext 小模型预训练 | 2–6 小时 |
 | CPT | 1–3 小时 |
 | SFT | 1–4 小时 |
-| **主线预训练（100M–200M，阶段 8）** | **2–20 小时（~200M 需按放宽规则记录理由；128M 目标 8h 内）** |
+| **主线预训练（~70M，阶段 8）** | **2–4 小时（D≈20N 严格匹配，无需放宽）** |
 | **主线 SFT（阶段 9）** | **1–4 小时** |
 | Reward Model | 1–3 小时 |
 | DPO | 1–4 小时 |
@@ -350,7 +350,7 @@ lmms-lab/ChartQA
 
 1. 数据审计和许可证清单；
 2. 自建 tokenizer；
-3. **主线模型从零预训练 checkpoint（100M–200M 级，阶段 8；小模型 checkpoint 作为教程对比项保留）**；
+3. **主线模型从零预训练 checkpoint（~70M 级，阶段 8，D≈20N 严格匹配；小模型 checkpoint 作为教程对比项保留）**；
 4. CPT adapter；
 5. **主线 SFT checkpoint（阶段 9）+ Qwen3 LoRA/QLoRA 对照**；
 6. **Reward Model（主线模型为主 + Qwen3 对照）**；

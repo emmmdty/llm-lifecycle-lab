@@ -6,9 +6,9 @@ English summary: this repository is a staged learning lab for the LLM lifecycle,
 
 ## 当前阶段
 
-本项目定位为 **LLM 全链路教学项目**（与 MiniMind、动手学 LLM 的定位差异与自我约束见 [docs/01 §1.1](docs/01_PROJECT_PLAN.md)）：以 5090 单卡可承载的**尽可能大**的从零预训练模型（100M–200M 级，规模决策框架见 [docs/01 §3.1](docs/01_PROJECT_PLAN.md) 与 [docs/06 Q21](docs/06_OPEN_QUESTIONS_AND_SCALING.md)）为主线教学模型，贯穿 SFT、RM、DPO、GRPO、统一评测、量化、部署全链路，Qwen3-0.6B 作为强基座对照。
+本项目定位为 **LLM 全链路教学项目**（与 MiniMind、动手学 LLM 的定位差异与自我约束见 [docs/01 §1.1](docs/01_PROJECT_PLAN.md)）：主线教学模型规模按"尽可能大"原则结合实测数据决策——minimind_dataset 实测 ~1.40B tokens，用户确认**严格 D≈20N → ~70M**（决策过程见 [docs/01 §3.1](docs/01_PROJECT_PLAN.md) 与 [docs/06 Q21](docs/06_OPEN_QUESTIONS_AND_SCALING.md)），贯穿 SFT、RM、DPO、GRPO、统一评测、量化、部署全链路，Qwen3-0.6B 作为强基座对照。
 
-项目已完成数据治理（阶段 2）、tokenizer（阶段 3）、TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）、Wikitext 正式教学预训练（阶段 5，Q1 缩放实验 + Q2 决策 + 80M token 正式训练）、Qwen3 CPT（阶段 6，rank-2 LoRA 573K 可训练参数、tigerbot-law 3.91M domain token、domain ppl -31.6%、通用无退化、7.4 分钟完成）和 SFT（阶段 7，tiny Full-SFT + Qwen3 LoRA/QLoRA-SFT 双实验、assistant-only loss、prompt 分组数据、merge 一致性、Full vs LoRA vs QLoRA 资源对比）。当前执行**阶段 8（主线从零预训练）**的文档与规划准备：minimind_dataset 数据治理、100M–200M 规模决策（D≈20N × 时间预算）、训练、与小模型资产（保留为教程对比项）的对照评测。阶段编号已重排：RM→10、DPO→11、GRPO→12、多模态→13、评测→14、量化→15、部署→16、最终验收→17（见 [docs/00](docs/00_PROJECT_AND_SERVER_AUDIT.md) 2026-08-10 补充）。
+项目已完成数据治理（阶段 2）、tokenizer（阶段 3）、TinyStories 快速预训练（阶段 4，18.1M 模型、全语料 392M tokens、实测 10.8 分钟完成闭环）、Wikitext 正式教学预训练（阶段 5，Q1 缩放实验 + Q2 决策 + 80M token 正式训练）、Qwen3 CPT（阶段 6，rank-2 LoRA 573K 可训练参数、tigerbot-law 3.91M domain token、domain ppl -31.6%、通用无退化、7.4 分钟完成）和 SFT（阶段 7，tiny Full-SFT + Qwen3 LoRA/QLoRA-SFT 双实验、assistant-only loss、prompt 分组数据、merge 一致性、Full vs LoRA vs QLoRA 资源对比）。当前执行**阶段 8（主线从零预训练）**：minimind_dataset 数据治理、~70M 规模决策（严格 D≈20N，2026-08-10 用户确认）、训练、与小模型资产（保留为教程对比项）的对照评测。阶段编号已重排：RM→10、DPO→11、GRPO→12、多模态→13、评测→14、量化→15、部署→16、最终验收→17（见 [docs/00](docs/00_PROJECT_AND_SERVER_AUDIT.md) 2026-08-10 补充）。
 
 阶段 7 停止条件已满足：
 

@@ -270,7 +270,7 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ## 阶段 8：主线从零预训练（2026-08-10 新增）
 
-背景：项目定位升级（docs/01 §1.1、§3.1）——5090 单卡可承载的**尽可能大**（100M–200M 级）的模型成为贯穿全链路的主线教学模型。原小模型资产（TinyStories 18.1M、Wikitext 5.32M/26.8M）保留为教程对比项。
+背景：项目定位升级（docs/01 §1.1、§3.1）——主线教学模型规模按"尽可能大"原则结合实测数据决策：minimind_dataset 治理后实测 ~1.40B tokens（Qwen3 口径）→ 用户确认**严格 D≈20N，N≈70M**。原小模型资产（TinyStories 18.1M、Wikitext 5.32M/26.8M）保留为教程对比项。
 
 ### 任务（按环节拆解）
 
@@ -280,7 +280,7 @@ Codex 不得在 smoke test 后自动开始正式训练。
    - 核对许可证、revision、大小、schema、去重；有界抽样；按行/document 分组切分 held-out；token 流（沿用阶段 2 流程）；manifest；
    - 记录与 minimind 原始用法（直接自回归文本流）的差异：我们做治理、切分、manifest，不照搬；
    - 实测治理后 token 总数，决定规模区间。
-3. **规模决策**（Q21）：按治理后 token 预算执行 D≈20N 决策（候选 100M–200M）；时间预算默认 8h（约 128M）、可放宽至 24h（约 200M，放宽理由 = 用户"尽可能大"决策，记录在运行日志）；若 token 不足按 Q2 先例降规模或数据受限记录。
+3. **规模决策**（Q21）：用户已确认严格 D≈20N（N=D/20≈70M，2026-08-10）；治理后按选定 tokenizer 实测修正（预期 60M–85M 区间），数据受限选项（128M–200M）未采用并记录理由；校验 `6·N·D / 实测吞吐 ≤ 8h`（~70M 无需放宽）。
 4. **训练**：复用 src/pretrain 框架（dry-run / smoke / bench / resume / run.json / metrics.jsonl），单卡 5090、BF16、cosine、seq 1024、max_steps 上限；200M 级约 40K–80K steps，需评估 checkpoint 保留策略（≤16 个）。
 5. **对照评测**（教程对比项）：与 TinyStories 18.1M、Wikitext 5.32M/26.8M、Q1 65.4M 数据点对照 val loss/ppl（同口径）；生成质量检查（固定 prompt、distinct 4-gram）。
 6. **教程**：撰写主线预训练教程（含与 minimind 同规模级对比的定位说明、规模决策全过程）。
@@ -304,7 +304,7 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 1. **原理**：assistant-only loss、chat template、Full vs LoRA/QLoRA 的资源权衡（复习 docs/06 Q16–Q20）。
 2. **数据**：中文 alpaca-gpt4-zh（语言匹配决策 Q16 的应用：主线模型预训练语料为中文，SFT 用中文数据；英文 alpaca-cleaned 留作英文能力对照）。
-3. **训练**：主线模型 Full-SFT（100M–200M 显存量级可承受，参照阶段 7 tiny Full 3.59GB）；packing、mask 流沿用阶段 7。
+3. **训练**：主线模型 Full-SFT（~70M 显存量级可承受，参照阶段 7 tiny Full 3.59GB）；packing、mask 流沿用阶段 7。
 4. **对照**：三档容量对照表（18.1M 退化 [Q19] / 主线模型 / Qwen3-0.6B LoRA），固定 50 prompt 前后对比。
 5. **生成验证**：固定 prompt 人工检查；distinct 指标；退化诊断（如发生，记录原因）。
 6. **教程**：更新 SFT 教程或撰写主线 SFT 章节。
@@ -497,5 +497,5 @@ Codex 不得在 smoke test 后自动开始正式训练。
 - 量化如何影响质量和性能；
 - vLLM 与 llama.cpp 的定位；
 - 共享 GPU 环境中如何安全运行；
-- 主线模型（100M–200M）的规模决策过程（D≈20N × 时间预算）；
+- 主线模型（~70M，D≈20N 严格匹配）的规模决策过程（实测数据 → D≈20N → 时间预算校验）；
 - 小模型资产（18.1M/5.32M/26.8M）作为对比项的教学结论（容量-能力曲线）；

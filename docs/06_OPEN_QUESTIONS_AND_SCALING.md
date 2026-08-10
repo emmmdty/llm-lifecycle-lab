@@ -181,10 +181,10 @@ README 事实（2026-08-05 核实）：
 | Q18 | QLoRA adapter merge 到 NF4 基座的一致性 | 阶段 7 | ✅ 已验证（merge 进 NF4 基座有损 ppl 6.65→8.88（PEFT 官方警告）；去量化到 BF16 后 merge 一致，loss 差 2.1e-4、生成 10/10；详见第 2 节 Q18） |
 | Q19 | 小模型（18.1M）SFT 后的生成退化现象 | 阶段 7 | ✅ 已记录（held-out assistant loss -43.5% 但生成退化到 `*` 重复；18M 容量不足以学指令遵循，诚实记录；详见第 2 节 Q19） |
 | Q20 | chat template 对 SFT 训练/评测口径的影响（Qwen3 空 think 块） | 阶段 7 | ✅ 已验证（训练时模板对最后一条 assistant 消息插空 `<think>\n\n</think>\n\n`；生成时需 enable_thinking=False 才能对齐，否则产生前缀噪声；详见第 2 节 Q20） |
-| Q21 | 主线预训练规模决策（minimind_dataset 治理后 token 预算 → D≈20N → 时间预算校验；**2026-08-10 实测主文件 ~1.40B tokens（Qwen3 口径）：严格匹配 ~70M，数据受限可上 128M–200M（t/p≈7–11），待用户决策**） | 阶段 8 | 待验证（决策框架见 docs/01 §3.1 与 docs/00 补充） |
-| Q22 | 32K 词表在 100M–200M 模型的 embedding 占比与精简词表对比（minimind 6400 经验；Q12 已示 65.4M 级占比 ~13%） | 阶段 8 | 待验证 |
-| Q23 | 主线模型（100M–200M）SFT 与 18.1M 退化（Q19）的容量对照 | 阶段 9 | 待验证 |
-| Q24 | 100M–200M 模型上 RM/DPO/GRPO 的可行性与效果（容量 vs RL 效果关系） | 阶段 10–12 | 待验证（诚实预期：小容量 RL 效果可能有限，按 Q19 先例如实记录） |
+| Q21 | 主线预训练规模决策（**2026-08-10 已决策：严格 D≈20N，~70M**；实测主文件 ~1.40B tokens（Qwen3 口径）→ N=1.4B/20≈70M；数据受限选项 128M–200M 未采用） | 阶段 8 | 待验证（决策框架见 docs/01 §3.1 与 docs/00 补充） |
+| Q22 | 32K 词表在 ~70M 模型的 embedding 占比与精简词表对比（minimind 6400 经验；Q12 已示 65.4M 级 16k 词表占比 ~13%） | 阶段 8 | 待验证 |
+| Q23 | 主线模型（~70M）SFT 与 18.1M 退化（Q19）的容量对照 | 阶段 9 | 待验证 |
+| Q24 | ~70M 模型上 RM/DPO/GRPO 的可行性与效果（容量 vs RL 效果关系） | 阶段 10–12 | 待验证（诚实预期：小容量 RL 效果可能有限，按 Q19 先例如实记录） |
 | Q25 | 主线模型 vs Qwen3-0.6B 的"教学载体"分工评估（全链路对照表） | 阶段 14 | 待验证 |
 | Q26 | minimind_dataset 治理（**2026-08-10 raw 已下载 + manifest 已建：sha256 通过、许可证冲突已记录（CC-BY-NC-4.0 vs Apache-2.0）、主文件 ~1.4B tokens 实测**；待治理：去重、抽样、held-out、token 流、mini 重叠核对） | 阶段 8 | 进行中 |
 
@@ -230,7 +230,7 @@ Qwen3 官方 chat template 对**最后一条 assistant 消息**无条件插入�
 4. 兜底：D 不足则降规模匹配，或数据受限记录（minimind 先例 t/p≈7.8）。
 ```
 
-**数据实测（2026-08-10，manifest 见 data/manifests/minimind-dataset.json）**：pretrain_t2t.jsonl 8.27GB / 8,468,827 行 / sha256 通过；Qwen3 tokenizer 抽样 5000 条 chars/token=1.65，主文件外推 **~1.40B tokens**。含义：严格 D≈20N 匹配为 **~70M**；128M → t/p≈11、200M → t/p≈7（数据受限，minimind 先例）。最终 token 数以治理时选定 tokenizer 的实测为准。规划值由"~200M"下修为"70M（严格匹配）或 128M–200M（数据受限，需用户决策，Q21 登记）。上限事实（修正）：8h → ~128M，24h → ~200M（原"875M"记录为错误，勘误见 docs/00 2026-08-10 补充）。
+**数据实测（2026-08-10，manifest 见 data/manifests/minimind-dataset.json）**：pretrain_t2t.jsonl 8.27GB / 8,468,827 行 / sha256 通过；Qwen3 tokenizer 抽样 5000 条 chars/token=1.65，主文件外推 **~1.40B tokens**。**决策（2026-08-10 用户确认：严格 D≈20N）**：`N = 1.4B/20 ≈ 70M`（治理后按选定 tokenizer 实测修正，预期 60M–85M）。数据受限选项（128M–200M，t/p≈7–11，minimind 先例 t/p≈7.8）经评估未采用：与 minimind 完全同规模同数据会退化为"再训一个 minimind"，且违背本项目方法论。物理上限事实（修正）：8h → ~128M，24h → ~200M（原"875M"记录为错误，勘误见 docs/00 2026-08-10 补充）。
 
 ### Q26：minimind_dataset 治理（待验证，阶段 8 执行；2026-08-10 raw 准备完成）
 
@@ -238,12 +238,12 @@ Qwen3 官方 chat template 对**最后一条 assistant 消息**无条件插入�
 - 许可证冲突记录：ModelScope yaml 标注 CC-BY-NC-4.0 vs HF 标注 Apache-2.0（以更严格的 CC-BY-NC-4.0 记录）；
 - 治理时需完成：schema 确认（已确认 `{"text": str}`）、去重、有界抽样、按行/document 分组切分 held-out、token 流（tokenizer 选定后实测）、mini 与主文件重叠核对、质量分布检查（样本含指令/对话风格文本）；
 
-### Q22：32K 词表在 100M–200M 模型的占比评估（待验证，阶段 8 执行）
+### Q22：32K 词表在 ~70M 模型的占比评估（待验证，阶段 8 执行）
 
-Q12 实测 embedding 占比：TS-64M=13%、Wiki-26.8M=65%。100M–200M 级 hidden 768–1024 下 32K 词表 embedding ≈ 2×(32768×1024)×2B ≈ 134MB（占 200M 的 ~33%），高于 64M 级——若可训练参数占比显著挤占，评估是否引入精简词表（minimind 6400 经验）作为对照实验；跨 tokenizer 比较用 BPB（Q14）。
+Q12 实测 embedding 占比：TS-64M=13%（16k 词表 tied）、Wiki-26.8M=65%。~70M 级 tied 32K 词表 embedding ≈ 32768×512×2B ≈ 33.5MB（约占总参数 24%，高于 16k 词表的 13%）——若可训练参数占比显著挤占，评估是否引入精简词表（minimind 6400 经验）作为对照实验；跨 tokenizer 比较用 BPB（Q14）。
 
 ### Q23/Q24/Q25：主线模型后续环节的容量问题（待验证，阶段 9–14 执行）
 
-- Q23：18.1M SFT 退化（Q19）→ 主线模型（100M–200M）→ Qwen3-0.6B 三档容量对照，回答"多大容量才能学指令遵循"；
+- Q23：18.1M SFT 退化（Q19）→ 主线模型（~70M）→ Qwen3-0.6B 三档容量对照，回答"多大容量才能学指令遵循"；
 - Q24：小容量模型上 RM/DPO/GRPO 的可行性与效果边界（诚实预期：效果可能有限，按 Q19 先例记录而非掩盖）；
 - Q25：统一评测阶段输出主线 vs Qwen3 的"教学载体"分工表，回答"为什么两条线都要"。
