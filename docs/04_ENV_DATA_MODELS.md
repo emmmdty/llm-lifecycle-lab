@@ -145,6 +145,7 @@ modelscope download \
 ### 从零预训练
 
 ```text
+jingyaogong/minimind_dataset（2026-08-10 主线预训练语料候选；pretrain_t2t_mini.jsonl 约 1.2GB / pretrain_t2t.jsonl 约 10GB；Apache-2.0；ModelScope 镜像名称与 revision 在阶段 8 治理时核对）
 AI-ModelScope/TinyStories
 modelscope/wikitext
 ```
@@ -288,7 +289,11 @@ du -sh models data 2>/dev/null
 
 ### Wikitext
 
-约 522.66MB，规模可控，来自精选 Wikipedia 文章，适合正式教学预训练。
+约 522.66MB，规模可控，来自精选 Wikipedia 文章，适合小模型正式教学预训练（阶段 5，已完成）。
+
+### minimind_dataset（2026-08-10 新增）
+
+主线预训练语料候选：pretrain_t2t_mini.jsonl 约 1.2GB / pretrain_t2t.jsonl 约 10GB，Apache-2.0，中文为主；阶段 8 必须按阶段 2 流程重新治理（许可证核对、schema、去重、有界抽样、分组切分 held-out、token 流、manifest），并记录与 minimind 原始用法（直接自回归文本流）的差异。硬盘预算：raw ≤10GB + int32 token 流 ≤16GB + checkpoint ≤16 个 ≈ 合计 ≤32GB。
 
 ### tigerbot-law-plugin
 

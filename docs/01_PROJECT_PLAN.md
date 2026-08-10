@@ -8,7 +8,7 @@
 公开数据
 → 数据检查与切分
 → Tokenizer
-→ 小模型从零预训练
+→ 从零预训练（主线模型 100M–200M 级，2026-08-10 升级）
 → Continued Pretraining
 → SFT
 → Reward Model
@@ -24,6 +24,21 @@
 这不是业务应用项目，也不要求训练出高质量通用模型。
 
 项目的最终目标是能够解释并复现每个阶段，而不是堆积数据、模型或训练时长。
+
+### 1.1 项目定位：与经典项目的差异（2026-08-10 更新）
+
+本项目是 **LLM 全链路教学项目**：以 5090 单卡可负担的最大规模（100M–200M 级主线模型），把数据治理 → Tokenizer → 从零预训练 → CPT → SFT → Reward Model → DPO → GRPO → 多模态 → 统一评测 → 量化 → 部署全链路的**每个环节拆细**：原理 → 最小实现 → 单元测试 → smoke → 基准 → 正式运行 → 验收 → 教程。
+
+与两个经典开源项目的关系（**不是重复造轮子，差异在"过程证据"**）：
+
+- **MiniMind（jingyaogong/minimind）**：产品/复现项目。目标是用最低成本训练出可用的 64M 级模型，价值是"结果"（模型与廉价训练配方），不提供数据治理、缩放律验证、统一评测、量化/部署基准、失败分析等过程证据。本项目与其同规模级训练存在的意义：用严格的阶段验收把 minimind 只展示"最终指标"的环节变成可解释、可复现、可对照的教学过程。
+- **动手学 LLM（datawhalechina/happy-llm）**：工具使用教程。概念讲解好，但实现层大量调用 ms-swift / llama-factory 等现成框架，学习者动手的是配置与命令，不是机制本身。本项目每个环节亲手实现核心机制（自建 tokenizer、自写训练循环、自写 RM head / Bradley–Terry / DPO / GRPO loss），用单元测试、合成数据、服务器实测证据验收；教程每章带本项目实测数字与失败案例。
+
+**自我约束（防止"为完成项目而完成项目"）**：
+
+1. 训练循环、loss、量化等代码与 TRL / llama-factory / LLM Compressor 功能重叠——存在理由是"教学 + 自测"，必须保留"与参考实现数值对照"的验证（阶段 7 已有 TRL import 对照先例），不抄代码、不把现成库的调用当作实现；
+2. 教程结构可与 happy-llm 章节重合，但每章必须包含本项目实测数据、失败案例与验收证据；
+3. 主线预训练与 minimind 同规模级——验收重点不是"再训一个 64M"，而是数据治理、规模决策方法（D≈20N × 时间预算）、缩放对照与全链路后续环节（Q25）。
 
 ## 2. 核心决策：文本主线，多模态扩展
 
@@ -64,23 +79,35 @@
 
 ### 3.1 从零预训练模型
 
-自行定义一个约 30M–60M 参数的 Decoder-only Transformer（**阶段 5 Q2 决策后调整，2026-08-05**：Wikitext-103 约 1 亿 token 与 30M–60M 模型存在数据-规模冲突，tokens/param 仅 1.7–3.4。经 Q1 多规模实验确认 D≈20N 幂律在本项目管线成立后，正式教学预训练改为 **5.32M 模型匹配 D≈20N（80M token 预算下 t/p=15.0）**，另以 **26.8M 模型作为欠训练对照**（t/p=3.0）并量化记录。原 30M–60M 方案废弃原因与全部证据见 docs/06 第 2 节）：
+**主线教学模型（2026-08-10 升级）**：5090 单卡可承载的**尽可能大**的 Decoder-only Transformer。规模不是固定值（64M 只是示例），由三个约束在阶段 8 执行时决策：
+
+1. **时间预算（主约束）**：单次任务默认 ≤8h，可放宽，硬上限 <24h。按项目实测吞吐 ~66 TFLOPS（docs/06 §4.3）与 D≈20N 外推 compute-optimal 上限：8h 内约 **128M**（2.6B token）；放宽至 24h 上限约 **200M**（4B token）。>250M 超出 24h 硬上限，不在本轮范围（需多卡或修改规则，只记录）。
+2. **数据预算（硬盘约束）**：主线预训练语料治理后的 token 数（候选 minimind_dataset pretrain，10GB 级，阶段 8 治理时实测）。D≈20N 下 4B token ≈ 200M；若治理后数据不足，按 Q2 先例降规模匹配或数据受限记录。
+3. **显存（非约束）**：32GB 显存实测可训练 ~1B 级模型（docs/06 §3），200M 级峰值约 6GB。
+
+**决策公式**（沿用 Q1/Q2 已验证框架）：`N = D/20`，再校验 `6·N·D / 66e12 ≤ 时间预算`。
+
+目标区间 **100M–200M**，默认按"尽可能大"规划 **~200M / ~4B token / 单次 ~20h**（放宽理由：用户 2026-08-10 决策）；若阶段 8 数据治理或基准实测吞吐不支持，回落 **~128M / 8h**。最终规模在阶段 8 的 150 步基准后按实测吞吐确定并记录（Q21）。
+
+候选配置起点（阶段 5 Q1 已验证 65.4M 的放大版，阶段 8 执行时决策）：
 
 ```yaml
-vocab_size: 32768（32K 词表）
-hidden_size: 128（正式 5.32M）/ 512（对照 26.8M）
-num_hidden_layers: 5（正式）/ 3（对照）
-num_attention_heads: 4 / 8（本项目实现未使用 GQA，注意力头数即 key/value 头数）
-intermediate_size: 512 / 2048
+vocab_size: 32768（32K 词表；Q12 已实测 65.4M 级 embedding 占比 ~13%，可接受；词表精简对比登记 Q22）
+hidden_size: 768–1024
+num_hidden_layers: 12–16
+num_attention_heads: 12–16
+intermediate_size: 3072–4096
 max_position_embeddings: 1024
 dtype: bfloat16
 ```
 
-用途是学习完整预训练流程，不需要下载外部 checkpoint。
+用途：主线教学模型，后续环节（主线 SFT、RM、DPO、GRPO、统一评测、量化、部署）全部以其为载体，Qwen3-0.6B 作为强基座对照。
 
-### 3.2 文本基础模型
+**历史小模型资产（保留为教程对比项，不再是主线载体）**：TinyStories 18.1M（阶段 4）、Wikitext 5.32M / 26.8M（阶段 5，Q2 决策）——作为规模/容量/欠训练对照数据点写入主线预训练教程。
 
-主线模型：
+### 3.2 文本基础模型（对照基座线，2026-08-10 定位更新）
+
+强基座对照线：
 
 ```text
 Qwen/Qwen3-0.6B-Base
@@ -88,13 +115,10 @@ Qwen/Qwen3-0.6B-Base
 
 用于：
 
-- CPT；
-- LoRA/QLoRA SFT；
-- Reward Model；
-- DPO；
-- GRPO；
-- 量化；
-- vLLM 部署。
+- CPT（已完成，阶段 6）；
+- LoRA/QLoRA SFT（已完成，阶段 7）；
+- Reward Model / DPO / GRPO 的强基座对照（阶段 10–12，主线模型为主、Qwen3 为对照）；
+- 量化和部署对照（阶段 15–16）。
 
 官方后训练对照：
 
@@ -122,7 +146,24 @@ Qwen/Qwen3.5-0.8B
 
 当前主线只使用规模可控、许可证可记录、可做有界抽样的数据集。任何大型网页语料都不能直接进入第一轮主线，必须先单独完成许可证、大小、split、schema 和磁盘预算审计。
 
-### 4.1 从零预训练
+### 4.1 主线从零预训练（阶段 8，2026-08-10 新增）
+
+主数据候选：
+
+```text
+jingyaogong/minimind_dataset（ModelScope 镜像名称与 revision 在阶段 8 治理时核对）
+```
+
+已公开信息（docs/06 §4.1 登记）：
+
+- Apache-2.0；
+- `pretrain_t2t_mini.jsonl` 约 1.2GB / `pretrain_t2t.jsonl` 约 10GB（主线候选）；
+- 中文为主，适合 100M–200M 级模型预训练；
+- minimind 原始用法是直接当自回归文本流（max_seq_len≈380/768），本项目必须按阶段 2 流程重新治理（许可证核对、schema、去重、有界抽样、按行/document 分组切分 held-out、token 流、manifest），并记录与 minimind 原始用法的差异。
+
+规模与数据预算由 D≈20N 决策框架在阶段 8 确定（Q21）：200M 目标对应约 4B token（10GB 原始若不足，实测后降规模或数据受限记录）。硬盘预算：raw ≤10GB + int32 token 流 ≤16GB + checkpoint 保留 ≤16 个 ≈ 合计 ≤32GB。
+
+### 4.2 从零预训练（历史教学数据，保留为教程对比项）
 
 主数据：
 
@@ -134,7 +175,7 @@ modelscope/wikitext
 
 - 约 522.66MB；
 - 来自精选 Wikipedia 文章；
-- 规模适合小模型预训练；
+- 规模适合小模型预训练（阶段 5 已完成）；
 - 文本自然，比纯合成语料更适合观察 validation loss。
 
 快速闭环数据：
@@ -145,18 +186,18 @@ AI-ModelScope/TinyStories
 
 用途：
 
-- 先训练 5M–20M 参数模型；
+- 先训练 5M–20M 参数模型（阶段 4 已完成）；
 - 快速验证 tokenizer、packing、loss、checkpoint 和生成；
 - 小模型容易观察到连贯文本生成。
 
-推荐安排：
+推荐安排（历史记录，2026-08-10 更新：主线语料见 4.1）：
 
 ```text
-TinyStories：只做快速预训练闭环
-Wikitext：作为 30M–60M 模型的正式教学语料
+TinyStories：快速预训练闭环（已完成）
+Wikitext：5.32M/26.8M 教学预训练（已完成，教程对比项）
 ```
 
-### 4.2 中文 CPT
+### 4.3 中文 CPT
 
 使用小型中文领域文本：
 
@@ -185,7 +226,7 @@ AI-ModelScope/tigerbot-law-plugin
 
 的中文技术或金融领域语料替换。替换前必须记录理由和许可证。
 
-### 4.3 中文 SFT
+### 4.4 中文 SFT
 
 使用：
 
@@ -204,7 +245,7 @@ AI-ModelScope/alpaca-gpt4-data-zh
 
 2026-08-06 补充：中文 alpaca-gpt4-zh 用于 Qwen3 LoRA/QLoRA-SFT（语言匹配）；另下载英文 alpaca-cleaned（cc-by-4.0，44MB）用于小模型 Full-SFT（小模型为英文预训练，语言匹配决策见 docs/06 Q16）。两者均按 user prompt 分组切分防跨 split 泄漏，治理 test 不进入训练。
 
-### 4.4 Reward Model 和 DPO
+### 4.5 Reward Model 和 DPO
 
 使用：
 
@@ -222,7 +263,7 @@ Validation：1,000 对
 
 必须按 prompt 分组切分，不能让同一个 prompt 的偏好对进入不同 split。
 
-### 4.5 GRPO
+### 4.6 GRPO
 
 主数据改为：
 
@@ -241,7 +282,7 @@ AI-ModelScope/gsm8k
 
 OpenR1-Math-220k 改为高级可选项，不进入第一轮主线。
 
-### 4.6 多模态
+### 4.7 多模态
 
 使用：
 
@@ -268,12 +309,16 @@ lmms-lab/ChartQA
 |---|---:|
 | TinyStories | 原始数据集或不超过 2GB |
 | Wikitext | 约 0.7GB 磁盘 |
+| 主线预训练（minimind_dataset 子集，阶段 8） | raw ≤10GB + int32 token 流 ≤16GB |
 | 中文 CPT 文本 | 不超过 1GB |
 | 中文 SFT | 不超过 1GB |
 | UltraFeedback 子集 | 不超过 2GB |
 | GSM8K | 小于 20MB |
 | ChartQA | 以实际盘点为准，训练子集 2K–5K |
 | 处理后 Parquet | 总计尽量不超过 10GB |
+| 主线 checkpoint | 保留 ≤16 个（200M 级每个约 0.4GB） |
+
+主线预训练资产（raw + token 流 + checkpoint）合计控制在 **~32GB 以内**（2026-08-10 用户决策：硬盘为约束，不占用过多）。
 
 这个项目不需要 TB 级数据。
 
@@ -283,9 +328,11 @@ lmms-lab/ChartQA
 |---|---:|
 | 环境 smoke | 10–20 分钟 |
 | TinyStories 快速预训练 | 0.5–2 小时 |
-| Wikitext 30M–60M 预训练 | 2–6 小时 |
+| Wikitext 小模型预训练 | 2–6 小时 |
 | CPT | 1–3 小时 |
 | SFT | 1–4 小时 |
+| **主线预训练（100M–200M，阶段 8）** | **2–20 小时（~200M 需按放宽规则记录理由；128M 目标 8h 内）** |
+| **主线 SFT（阶段 9）** | **1–4 小时** |
 | Reward Model | 1–3 小时 |
 | DPO | 1–4 小时 |
 | GRPO | 1–5 小时 |
@@ -300,14 +347,14 @@ lmms-lab/ChartQA
 
 1. 数据审计和许可证清单；
 2. 自建 tokenizer；
-3. 小模型从零预训练 checkpoint；
+3. **主线模型从零预训练 checkpoint（100M–200M 级，阶段 8；小模型 checkpoint 作为教程对比项保留）**；
 4. CPT adapter；
-5. SFT adapter；
-6. Reward Model；
-7. DPO adapter；
-8. GRPO 运行结果；
+5. **主线 SFT checkpoint（阶段 9）+ Qwen3 LoRA/QLoRA 对照**；
+6. **Reward Model（主线模型为主 + Qwen3 对照）**；
+7. **DPO adapter（同 6）**；
+8. **GRPO 运行结果（同 6）**；
 9. 可选 VLM adapter；
-10. 统一评测报告；
-11. BF16、NF4、W4A16、GGUF 结果；
-12. vLLM 和 llama.cpp 性能报告；
+10. **统一评测报告（主线模型 + Qwen3 对照线）**；
+11. **BF16、NF4、W4A16、GGUF 结果（主线模型为主）**；
+12. **vLLM 和 llama.cpp 性能报告（主线模型为主）**；
 13. 每个阶段的命令、配置、指标和失败分析。

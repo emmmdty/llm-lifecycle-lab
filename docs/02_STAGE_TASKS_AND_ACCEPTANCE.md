@@ -18,6 +18,23 @@
 
 Codex 不得在 smoke test 后自动开始正式训练。
 
+### 环节拆解（2026-08-10 升级：把每个环节拆细，缺项视为未完成）
+
+| 环节 | 内容 | 产出物 |
+| --- | --- | --- |
+| 1 原理 | 写出该环节的原理（公式 / 流程图 / 与文献对照），明确学习目标 | 阶段报告"原理"节 |
+| 2 输入盘点 | 数据 / 模型 / checkpoint 现状、许可证、revision、大小与预算 | manifest / 资产记录 |
+| 3 最小实现 | 核心机制亲手实现（不抄现成库；与参考实现数值对照） | 源码 |
+| 4 单元测试 | 本地 synthetic fixture 覆盖核心逻辑 | pytest 通过 |
+| 5 CPU / 单 batch | 服务器 CPU 或单 batch 跑通 | 日志 |
+| 6 GPU smoke | 最多 5 step | 日志 + run.json |
+| 7 性能基准 | 100–200 step，含 resume 连续性，据此估算正式时长 | 基准日志 + 报告 |
+| 8 正式运行 | 人工确认后；有 max_steps；预算内 | runs/ 完整记录 |
+| 9 验收 | 逐项对照验收标准，每条给证据 | 验收报告 |
+| 10 教程 | 撰写该阶段教程（真实问题与解决过程） | docs/tutorials/NN_*.md |
+
+每阶段记录必须包含：Git commit、完整命令、resolved config、Python/Torch/CUDA/GPU、模型和数据 revision、seed、loss 与关键指标、tokens/s、step time、峰值显存、checkpoint、失败与限制。
+
 每次正式运行必须记录：
 
 - Git commit；
@@ -251,15 +268,69 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ---
 
-## 阶段 8：Reward Model
+## 阶段 8：主线从零预训练（2026-08-10 新增）
 
-### 任务
+背景：项目定位升级（docs/01 §1.1、§3.1）——5090 单卡可承载的**尽可能大**（100M–200M 级）的模型成为贯穿全链路的主线教学模型。原小模型资产（TinyStories 18.1M、Wikitext 5.32M/26.8M）保留为教程对比项。
 
-- 使用 chosen/rejected pair；
-- 添加 scalar classification head；
-- 实现 pairwise Bradley–Terry loss；
-- 统计 preference accuracy 和 reward margin；
-- 检查长度偏置。
+### 任务（按环节拆解）
+
+1. **原理**：复习 D≈20N 缩放规律与 Q1/Q2 验证结论（docs/06 第 2 节）；写出本阶段的规模决策公式 `N = D/20` 与时间校验 `6·N·D / 实测吞吐 ≤ 时间预算`。
+2. **主线语料治理**（Q26）：
+   - 候选：minimind_dataset pretrain（ModelScope，Apache-2.0，1.2GB mini / 10GB 主线）；
+   - 核对许可证、revision、大小、schema、去重；有界抽样；按行/document 分组切分 held-out；token 流（沿用阶段 2 流程）；manifest；
+   - 记录与 minimind 原始用法（直接自回归文本流）的差异：我们做治理、切分、manifest，不照搬；
+   - 实测治理后 token 总数，决定规模区间。
+3. **规模决策**（Q21）：按治理后 token 预算执行 D≈20N 决策（候选 100M–200M）；时间预算默认 8h（约 128M）、可放宽至 24h（约 200M，放宽理由 = 用户"尽可能大"决策，记录在运行日志）；若 token 不足按 Q2 先例降规模或数据受限记录。
+4. **训练**：复用 src/pretrain 框架（dry-run / smoke / bench / resume / run.json / metrics.jsonl），单卡 5090、BF16、cosine、seq 1024、max_steps 上限；200M 级约 40K–80K steps，需评估 checkpoint 保留策略（≤16 个）。
+5. **对照评测**（教程对比项）：与 TinyStories 18.1M、Wikitext 5.32M/26.8M、Q1 65.4M 数据点对照 val loss/ppl（同口径）；生成质量检查（固定 prompt、distinct 4-gram）。
+6. **教程**：撰写主线预训练教程（含与 minimind 同规模级对比的定位说明、规模决策全过程）。
+
+### 验收
+
+- 数据治理产物齐全（manifest、token 流、held-out 切分、与 minimind 原始用法差异记录）；
+- 规模决策有完整计算证据（D≈20N + 时间预算 + 实测吞吐）；
+- 无 NaN/Inf；validation loss 下降；resume 连续性验证通过；
+- 单次任务 ≤8h（128M 方案）或放宽记录（200M 方案，<24h 硬上限）；
+- 与既有小模型数据点有对照表；
+- checkpoint 可重新加载；生成样本入库；教程完成。
+
+---
+
+## 阶段 9：主线 SFT（2026-08-10 新增）
+
+背景：阶段 7 已教过 SFT 全流程（tiny Full-SFT + Qwen3 LoRA/QLoRA）。本阶段把 SFT 应用到主线模型，教学点是**容量与数据的过渡带**（18M 退化 → 64M+ 正常 → 0.6B 强基座的三档容量对照）。
+
+### 任务（按环节拆解）
+
+1. **原理**：assistant-only loss、chat template、Full vs LoRA/QLoRA 的资源权衡（复习 docs/06 Q16–Q20）。
+2. **数据**：中文 alpaca-gpt4-zh（语言匹配决策 Q16 的应用：主线模型预训练语料为中文，SFT 用中文数据；英文 alpaca-cleaned 留作英文能力对照）。
+3. **训练**：主线模型 Full-SFT（100M–200M 显存量级可承受，参照阶段 7 tiny Full 3.59GB）；packing、mask 流沿用阶段 7。
+4. **对照**：三档容量对照表（18.1M 退化 [Q19] / 主线模型 / Qwen3-0.6B LoRA），固定 50 prompt 前后对比。
+5. **生成验证**：固定 prompt 人工检查；distinct 指标；退化诊断（如发生，记录原因）。
+6. **教程**：更新 SFT 教程或撰写主线 SFT 章节。
+
+### 验收
+
+- assistant-only loss 下降；
+- 三档容量对照表（含与 Q19 的对比结论）；
+- 固定 50 prompt 前后对比报告；
+- checkpoint 可重新加载；
+- 训练 ≤4 小时。
+
+---
+
+## 阶段 10：Reward Model
+
+载体：主线模型 Full-RM（scalar head 直接加在主线模型上）为主，Qwen3-0.6B LoRA-RM 为强基座对照；教学点包括小容量 RM 的 preference accuracy 与长度偏置。
+
+### 任务（按环节拆解）
+
+1. **原理**：Bradley–Terry pairwise loss、scalar head、preference accuracy 口径。
+2. **数据**：ultrafeedback_binarized，按 prompt 分组切分（5,000 对 train / 1,000 对 validation），同一 prompt 不跨 split；治理 test 不进入训练。
+3. **实现**：chosen/rejected 同 prompt 配对、标量 head、pairwise loss、reward margin 统计。
+4. **训练**：dry-run → smoke → bench → 正式（1–3h 预算）；主线 Full-RM 与 Qwen3 LoRA-RM 双实验。
+5. **分析**：chosen/rejected reward 分布可视化；reward 与回答长度相关性（长度偏置）；对抗样本（重复、拒答、格式）。
+6. **教程**：RM 教程（含与 DPO 的衔接说明）。
 
 ### 验收
 
@@ -267,19 +338,22 @@ Codex 不得在 smoke test 后自动开始正式训练。
 - 同 prompt 不跨 split；
 - chosen/rejected reward 分布可视化；
 - 报告 reward 与回答长度相关性；
-- 保存可重新加载的模型。
+- 保存可重新加载的模型（主线 + Qwen3 两条线）。
 
 ---
 
-## 阶段 9：DPO
+## 阶段 11：DPO
 
-### 任务
+载体：policy = 主线 SFT（阶段 9 产物），reference = 主线 SFT 冻结副本；Qwen3 线（阶段 7 SFT 产物）为对照。
 
-- 从 SFT checkpoint 开始；
-- 明确 policy 和 reference；
-- 记录 chosen/rejected log probability；
-- 调整 beta、learning rate 和 epoch；
-- 比较 SFT 与 DPO。
+### 任务（按环节拆解）
+
+1. **原理**：DPO 的隐式 reward、KL 约束、beta 的作用；与 RM（阶段 10）的衔接与差异。
+2. **数据**：ultrafeedback_binarized 8,000 对（prompt 分组，与 RM 阶段同一治理产物）。
+3. **实现**：policy/reference 双模型、chosen/rejected log-prob、DPO loss、无需在线 rollout。
+4. **训练**：从 SFT checkpoint 开始；调整 beta、learning rate、epoch；主线 + Qwen3 对照。
+5. **评估**：preference margin 提升；KL/相对偏移；通用评测不灾难性下降；固定 prompt 对比。
+6. **教程**：DPO 教程。
 
 ### 验收
 
@@ -291,15 +365,18 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ---
 
-## 阶段 10：GRPO
+## 阶段 12：GRPO
 
-### 任务
+载体：主线模型（生成质量受限则如实记录）为主，Qwen3 为对照。
 
-- 使用 GSM8K；
-- 每个 prompt 生成 2–4 个回答；
-- 实现最终答案解析；
-- 分离 exact-answer reward 与 format reward；
-- 执行短 GRPO。
+### 任务（按环节拆解）
+
+1. **原理**：在线策略梯度、组内 advantage 归一化、reward 与 advantage 的关系。
+2. **数据**：GSM8K（500–2,000 题），答案程序化解析。
+3. **实现**：policy 生成 2–4 个回答/ prompt；exact-answer reward 与 format reward 分离。
+4. **训练**：短 GRPO；干跑 → smoke → bench → 正式（≤5h）。
+5. **评估**：exact accuracy 与格式正确率分开报告；平均 reward 不替代准确率；人工检查至少 50 条 rollout；防 reward hacking。
+6. **教程**：GRPO 教程。
 
 ### 验收
 
@@ -311,16 +388,18 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ---
 
-## 阶段 11：多模态扩展
+## 阶段 13：多模态扩展
 
-### 任务
+载体：Qwen3.5-0.8B-Base（文本主线不阻塞，独立扩展线）。
 
-- 加载 Qwen3.5-0.8B-Base 和 processor；
-- 处理 ChartQA 图像与 messages；
-- 冻结视觉编码器起步；
-- 为语言层/连接层添加 LoRA；
-- 限制图像尺寸；
-- 执行 2K–5K 样本短训练。
+### 任务（按环节拆解）
+
+1. **原理**：processor、image token、vision encoder + projector 结构。
+2. **数据**：ChartQA（2K–5K 训练样本 + 独立验证/测试子集）。
+3. **实现**：messages 含图像；冻结视觉编码器起步；语言层/连接层 LoRA；图像尺寸限制。
+4. **训练**：短训练；记录预处理时间和峰值显存。
+5. **评估**：image token 未被截断；单图、纯文本推理可用；ChartQA 子集比 Base 改善；纯文本能力无明显退化。
+6. **教程**：多模态教程。
 
 ### 验收
 
@@ -332,19 +411,17 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ---
 
-## 阶段 12：统一评测
+## 阶段 14：统一评测
 
-### 任务
+对象：主线模型全量（预训练 → SFT → DPO/GRPO 各节点）+ Qwen3 对照线。
 
-统一评测：
+### 任务（按环节拆解）
 
-- held-out loss/perplexity；
-- GSM8K；
-- C-Eval 子集；
-- HellaSwag；
-- 固定中文指令；
-- preference validation；
-- ChartQA test 子集。
+1. **清单**：held-out loss/perplexity、GSM8K、C-Eval 子集、HellaSwag、固定中文指令、preference validation、ChartQA test 子集。
+2. **实现**：统一评测脚本；checkpoint、数据 revision、generation config 固定。
+3. **执行**：全部结果写入统一表；不可比较项明确标记。
+4. **分析**：链路各节点的能力曲线（预训练 → SFT → RL 的逐阶段变化）；与 docs/06 评价清单对照。
+5. **教程**：统一评测教程。
 
 ### 验收
 
@@ -356,19 +433,17 @@ Codex 不得在 smoke test 后自动开始正式训练。
 
 ---
 
-## 阶段 13：量化
+## 阶段 15：量化
 
-### 任务
+对象：主线模型（BF16/NF4/W4A16/GGUF），Qwen3 可选。
 
-比较：
+### 任务（按环节拆解）
 
-```text
-BF16
-NF4
-W4A16
-GGUF Q8_0
-GGUF Q4_K_M
-```
+1. **原理**：NF4 分位量化、W4A16 离线校准量化、GGUF 量化格式差异。
+2. **实现**：LLM Compressor（.venv-quant）与 llama.cpp 转换；校准集不含 test。
+3. **执行**：比较磁盘、显存和质量（同一 tokenizer、prompt、generation config、评测集）。
+4. **记录**：转换命令、工具版本、量化质量下降解释。
+5. **教程**：量化教程。
 
 ### 验收
 
@@ -380,15 +455,17 @@ GGUF Q4_K_M
 
 ---
 
-## 阶段 14：部署
+## 阶段 16：部署
 
-### 任务
+对象：主线模型（vLLM BF16/W4A16、llama.cpp GGUF），Qwen3 可选。
 
-- vLLM 部署 BF16/W4A16；
-- llama.cpp 部署 GGUF；
-- OpenAI-compatible API；
-- 并发 1、4、8；
-- 固定输入输出长度。
+### 任务（按环节拆解）
+
+1. **实现**：vLLM 部署（OpenAI-compatible API）；llama.cpp GGUF 部署。
+2. **性能基准**：并发 1、4、8；固定输入输出长度。
+3. **记录**：TTFT、TPOT、output tokens/s、requests/s、P50/P95、error rate、peak GPU memory。
+4. **质量回归**：同一质量评测（阶段 14 口径）。
+5. **教程**：部署教程。
 
 ### 验收
 
@@ -405,7 +482,7 @@ GGUF Q4_K_M
 
 ---
 
-## 阶段 15：最终验收
+## 阶段 17：最终验收
 
 ### 验收问题
 
@@ -419,4 +496,6 @@ GGUF Q4_K_M
 - 数据如何避免泄漏；
 - 量化如何影响质量和性能；
 - vLLM 与 llama.cpp 的定位；
-- 共享 GPU 环境中如何安全运行。
+- 共享 GPU 环境中如何安全运行；
+- 主线模型（100M–200M）的规模决策过程（D≈20N × 时间预算）；
+- 小模型资产（18.1M/5.32M/26.8M）作为对比项的教学结论（容量-能力曲线）；
