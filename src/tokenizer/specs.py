@@ -56,4 +56,13 @@ TOKENIZER_SPECS: dict[str, TokenizerSpec] = {
         corpus="tinystories",
         notes=("byte-level BPE; 32K vocab for the 30M-60M Wikitext teaching pretrain.",),
     ),
+    "mainline-bpe-32k": TokenizerSpec(
+        name="mainline-bpe-32k",
+        vocab_size=32_768,
+        corpus="minimind-pretrain",
+        notes=(
+            "byte-level BPE; 32K vocab trained on governed minimind-pretrain corpus (zh+en).",
+            "阶段 8 主线预训练 tokenizer（Q22 决策 A：自建中文 32k BPE，2026-08-10 用户确认）。",
+        ),
+    ),
 }

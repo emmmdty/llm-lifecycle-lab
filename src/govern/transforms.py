@@ -51,6 +51,13 @@ def wikitext(row: dict) -> dict | None:
     return {"text": text}
 
 
+def minimind(row: dict) -> dict | None:
+    text = str(row.get("text") or "").strip()
+    if len(text) < 10:
+        return None
+    return {"text": text}
+
+
 def ultrafeedback(row: dict) -> dict | None:
     instruction = str(row.get("instruction") or "").strip()
     chosen = str(row.get("chosen") or "").strip()
@@ -105,6 +112,7 @@ TRANSFORMS: dict[str, Transform] = {
     "gsm8k": gsm8k,
     "tinystories": tinystories,
     "wikitext": wikitext,
+    "minimind": minimind,
     "ultrafeedback": ultrafeedback,
     "chartqa": chartqa,
     "ceval": ceval,

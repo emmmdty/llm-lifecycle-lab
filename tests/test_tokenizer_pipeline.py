@@ -284,3 +284,14 @@ def test_read_reference_config(tmp_path: Path) -> None:
     config = _read_reference_config(directory)
     assert config == {"vocab_size": 151936, "hidden_size": 1024, "tie_word_embeddings": True}
     assert _read_reference_config(tmp_path / "missing") is None
+
+
+def test_mainline_bpe_32k_spec() -> None:
+    from tokenizer.specs import TOKENIZER_SPECS
+
+    spec = TOKENIZER_SPECS["mainline-bpe-32k"]
+    assert spec.vocab_size == 32_768
+    assert spec.corpus == "minimind-pretrain"
+    assert spec.special_ids() == {"bos": 0, "eos": 1, "pad": 2, "unk": 3}
+    assert len(spec.special_tokens) == 4
+    assert len(set(spec.special_tokens)) == 4

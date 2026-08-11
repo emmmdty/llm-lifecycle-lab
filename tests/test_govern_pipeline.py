@@ -250,3 +250,65 @@ def test_registry_complete_and_consistent() -> None:
         if spec.split_strategy == "group_by":
             assert spec.group_key
             assert spec.partitions
+
+
+def test_minimind_transform_and_spec() -> None:
+    transform = TRANSFORMS["minimind"]
+    assert transform({"text": "  你好世界，这是一段有效的中文文本内容  "}) == {
+        "text": "你好世界，这是一段有效的中文文本内容"
+    }
+    assert transform({"text": ""}) is None
+    assert transform({"text": "   "}) is None
+    assert transform({"text": "短"}) is None
+    assert transform({"text": "这是一段超过十个字符的中文文本"})["text"].startswith("这是一段")
+
+    spec = DATASETS["minimind-pretrain"]
+    assert spec.reader == "jsonl"
+    assert spec.transform == "minimind"
+    assert spec.split_strategy == "shuffle"
+    assert spec.pattern == "minimind_dataset/pretrain_t2t.jsonl"
+    assert spec.fracs == (0.98, 0.02, 0.0)
+    assert spec.budget is None
+    assert spec.token_cap is None
+
+
+def test_minimind_shuffle_split_fracs() -> None:
+    tmp = Path("/tmp/opencode/govern-minimind-1")
+    rows = [{"text": f"第 {i} 条用于切分测试的中文文本内容" * 2} for i in range(200)]
+    _write_jsonl(tmp, "a.jsonl", rows)
+    spec = _make_spec({"transform": "minimind", "fracs": (0.98, 0.02, 0.0)})
+    records = load_records(spec, tmp)
+    deduped, removed = dedupe(records)
+    assert removed == 0
+    result = run_dataset(spec, tmp, tmp / "out", tmp / "man")
+    train = result["partitions"]["train"]["records"]
+    validation = result["partitions"]["validation"]["records"]
+    assert "test" not in result["partitions"] or result["partitions"]["test"]["records"] == 0
+    assert train == 196
+    assert validation == 4
+
+
+def test_overlap_detection() -> None:
+    from govern.check_overlap import build_main_hashes, sample_overlap
+
+    main = Path("/tmp/opencode/govern-overlap-main.jsonl")
+    mini = Path("/tmp/opencode/govern-overlap-mini.jsonl")
+    main.write_text(
+        "\n".join(
+            json.dumps({"text": f"主文件文本内容 {i}"}, ensure_ascii=False)
+            for i in range(50)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mini_rows = [json.dumps({"text": f"主文件文本内容 {i}"}, ensure_ascii=False) for i in range(10)]
+    mini_rows.append(json.dumps({"text": "mini 独有的独立内容行"}, ensure_ascii=False))
+    mini.write_text("\n".join(mini_rows) + "\n", encoding="utf-8")
+
+    main_hashes = build_main_hashes(main)
+    assert len(main_hashes) == 50
+    result = sample_overlap(mini, main_hashes, sample=None)
+    assert result["mini_sampled"] == 11
+    assert result["mini_overlap"] == 10
+    assert result["overlap_ratio"] >= 0.9
+    assert "exclude" in result["verdict"]
