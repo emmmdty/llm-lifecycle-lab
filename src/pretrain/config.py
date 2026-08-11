@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 # Stage 5 multi-scale experiment covers 5M/18M/64M plus the Q2-decided
-# Wikitext formal model (<= ~64M); guard is 4M-70M with margin.
-PARAM_RANGE = (4_000_000, 70_000_000)
+# Wikitext formal model (<= ~64M); stage 8 mainline model is ~80M
+# (D~20N from 1.54B tokens / 20). Guard is 4M-85M with margin.
+PARAM_RANGE = (4_000_000, 85_000_000)
 
 
 @dataclass(frozen=True)
