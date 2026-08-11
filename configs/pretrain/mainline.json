@@ -24,7 +24,7 @@
     "seq_len": 1024,
     "micro_batch_size": 8,
     "grad_accum_steps": 8,
-    "max_steps": 25000,
+    "max_steps": 23545,
     "warmup_steps": 1000,
     "min_lr_ratio": 0.1,
     "peak_lr": 0.0003,
