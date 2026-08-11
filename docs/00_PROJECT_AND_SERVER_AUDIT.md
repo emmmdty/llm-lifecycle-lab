@@ -503,3 +503,18 @@ README.md / .gitattributes
 - 硬盘预算更新：主线预训练资产（raw + token 流 + checkpoint）合计 ≤20GB。
 
 数据治理（去重、抽样、held-out 切分、tokenizer 选定、token 流）属阶段 8 正式执行任务，等待 tokenizer 决策后进行（规模已决策：~70M，严格 D≈20N）。
+
+## 2026-08-11 补充：阶段 8 数据治理与基准完成（正式训练待授权）
+
+阶段 8 准备链（①–⑤）已在 5090 完成：
+
+1. **Token 化决策落地（Q22 方案 A）**：自建中文 32k BPE `mainline-bpe-32k`（artifacts/tokenizers/mainline-bpe-32k，100K 行抽样训练，32,768 词表，special ids 固定，中文压缩率实测 1.53 chars/token（短文本口径））。
+2. **治理完成（Q26）**：minimind-pretrain（data/processed/minimind-pretrain/{train,validation}.parquet）：shuffle 98/2（test 无），raw 8,468,596 → 去重 3,748 → train 8,295,551 行 / val 169,297 行；**mini 文件与主文件 100% 行级重叠（1,270,238/1,270,238），判定为子集排除**（reports/minimind-overlap.json）；manifest：data/manifests/minimind-pretrain.json。
+3. **规模决策落地（Q21）**：全量编码实测 train = **1,543,221,164 tokens**（mainline-bpe-32k 口径）→ `N = 1.543B/20 ≈ 77.2M` → 实现配置 **L20 = 80.35M 参数，t/p = 19.2**（configs/pretrain/mainline.json）；PARAM_RANGE 放宽至 4M–85M。token 流：data/processed/minimind-pretrain/tokens/mainline-bpe-32k/{train,validation}.bin（6.17GB / 125.9MB）。
+4. **dry-run**：loss 10.50（≈ln 32768=10.40，随机初始化正常），finite。
+5. **smoke 5 步**：loss 10.50→9.98，峰值显存 6.84GB。
+6. **bench 150 步**（runs/bench8/20260811-132737）：avg **106.6K tokens/s**（后 140 步），step time ~0.8s，MFU 10.4%，loss→7.51；**resume 连续性通过**（step-75 恢复，step 74→77 loss 7.7767→7.7486 无跳变）。
+
+**正式训练估算**：1.543B tokens / 106.6K t/s ≈ **4.0 小时**（保守按 82K t/s 约 5.2h），远低于 8h 上限，无需放宽。max_steps=23545（1 epoch 精确）。**正式训练待用户确认后启动（Codex 不自动启动）**。
+
+已知注意点：服务器 12:11 被其他用户重启过一次（tokenizer 全量训练进程被中断，改为 100K 行抽样训练——tokenizer 抽样训练为标准实践，不影响词表质量）；cpolar 隧道频繁抖动（多次重连，均为隧道层问题，非服务器故障）。

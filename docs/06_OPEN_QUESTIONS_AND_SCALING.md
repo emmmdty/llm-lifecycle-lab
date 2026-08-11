@@ -181,12 +181,12 @@ README 事实（2026-08-05 核实）：
 | Q18 | QLoRA adapter merge 到 NF4 基座的一致性 | 阶段 7 | ✅ 已验证（merge 进 NF4 基座有损 ppl 6.65→8.88（PEFT 官方警告）；去量化到 BF16 后 merge 一致，loss 差 2.1e-4、生成 10/10；详见第 2 节 Q18） |
 | Q19 | 小模型（18.1M）SFT 后的生成退化现象 | 阶段 7 | ✅ 已记录（held-out assistant loss -43.5% 但生成退化到 `*` 重复；18M 容量不足以学指令遵循，诚实记录；详见第 2 节 Q19） |
 | Q20 | chat template 对 SFT 训练/评测口径的影响（Qwen3 空 think 块） | 阶段 7 | ✅ 已验证（训练时模板对最后一条 assistant 消息插空 `<think>\n\n</think>\n\n`；生成时需 enable_thinking=False 才能对齐，否则产生前缀噪声；详见第 2 节 Q20） |
-| Q21 | 主线预训练规模决策（**2026-08-10 已决策：严格 D≈20N，~70M**；实测主文件 ~1.40B tokens（Qwen3 口径）→ N=1.4B/20≈70M；数据受限选项 128M–200M 未采用） | 阶段 8 | 待验证（决策框架见 docs/01 §3.1 与 docs/00 补充） |
-| Q22 | 32K 词表在 ~70M 模型的 embedding 占比与精简词表对比（minimind 6400 经验；Q12 已示 65.4M 级 16k 词表占比 ~13%） | 阶段 8 | 待验证 |
-| Q23 | 主线模型（~70M）SFT 与 18.1M 退化（Q19）的容量对照 | 阶段 9 | 待验证 |
-| Q24 | ~70M 模型上 RM/DPO/GRPO 的可行性与效果（容量 vs RL 效果关系） | 阶段 10–12 | 待验证（诚实预期：小容量 RL 效果可能有限，按 Q19 先例如实记录） |
+| Q21 | 主线预训练规模决策（**✅ 已决策并落地（2026-08-11）：严格 D≈20N，mainline-bpe-32k 全量实测 train=1,543,221,164 tokens → N≈77.2M → L20=80.35M，t/p=19.2**） | 阶段 8 | ✅ 已验证（决策证据见 docs/01 §3.1 与 docs/00 2026-08-10/11 补充） |
+| Q22 | 32K 词表在 ~80M 模型的 embedding 占比（**2026-08-11 实测：tied 32k×512=16.78M / 80.35M = 20.9%**；minimind 6400 词表对照未做，作为记录项） | 阶段 8 | 部分验证 |
+| Q23 | 主线模型（~80M）SFT 与 18.1M 退化（Q19）的容量对照 | 阶段 9 | 待验证 |
+| Q24 | ~80M 模型上 RM/DPO/GRPO 的可行性与效果（容量 vs RL 效果关系） | 阶段 10–12 | 待验证（诚实预期：小容量 RL 效果可能有限，按 Q19 先例如实记录） |
 | Q25 | 主线模型 vs Qwen3-0.6B 的"教学载体"分工评估（全链路对照表） | 阶段 14 | 待验证 |
-| Q26 | minimind_dataset 治理（**2026-08-10 raw 已下载 + manifest 已建：sha256 通过、许可证冲突已记录（CC-BY-NC-4.0 vs Apache-2.0）、主文件 ~1.4B tokens 实测**；待治理：去重、抽样、held-out、token 流、mini 重叠核对） | 阶段 8 | 进行中 |
+| Q26 | minimind_dataset 治理（**✅ 2026-08-11 完成：mini 与主文件 100% 重叠判定为子集排除；shuffle 98/2 切分；全量编码 train 1,543,221,164 / val 31,468,985 tokens；manifest minimind-pretrain.json**） | 阶段 8 | ✅ 已完成（数据治理） |
 
 ## 8. 阶段 7 SFT 决策与验证记录
 
@@ -230,7 +230,7 @@ Qwen3 官方 chat template 对**最后一条 assistant 消息**无条件插入�
 4. 兜底：D 不足则降规模匹配，或数据受限记录（minimind 先例 t/p≈7.8）。
 ```
 
-**数据实测（2026-08-10，manifest 见 data/manifests/minimind-dataset.json）**：pretrain_t2t.jsonl 8.27GB / 8,468,827 行 / sha256 通过；Qwen3 tokenizer 抽样 5000 条 chars/token=1.65，主文件外推 **~1.40B tokens**。**决策（2026-08-10 用户确认：严格 D≈20N）**：`N = 1.4B/20 ≈ 70M`（治理后按选定 tokenizer 实测修正，预期 60M–85M）。数据受限选项（128M–200M，t/p≈7–11，minimind 先例 t/p≈7.8）经评估未采用：与 minimind 完全同规模同数据会退化为"再训一个 minimind"，且违背本项目方法论。物理上限事实（修正）：8h → ~128M，24h → ~200M（原"875M"记录为错误，勘误见 docs/00 2026-08-10 补充）。
+**数据实测（2026-08-10/11，manifest 见 data/manifests/minimind-dataset.json 与 minimind-pretrain.json）**：pretrain_t2t.jsonl 8.27GB / 8,468,827 行 / sha256 通过；治理后 train 8,295,551 行 / validation 169,297 行；mini 文件与主文件 **100% 行级重叠**（1,270,238/1,270,238），判定为子集，排除。**tokenizer 实测（2026-08-11，mainline-bpe-32k）**：全量编码 train = **1,543,221,164 tokens**（32k 口径，chars/token≈2.06，含 BOS/EOS）、validation = 31,468,985 tokens。**规模决策落地（用户确认严格 D≈20N）**：`N = 1.543B/20 ≈ 77.2M` → 实现配置 **L20 = 80.35M 参数，t/p = 19.2**（configs/pretrain/mainline.json，2026-08-11）。数据受限选项（128M–200M）未采用：与 minimind 完全同规模同数据会退化为"再训一个 minimind"，且违背方法论。物理上限事实（修正）：8h → ~128M，24h → ~200M（原"875M"记录为错误，勘误见 docs/00 2026-08-10 补充）。
 
 ### Q26：minimind_dataset 治理（待验证，阶段 8 执行；2026-08-10 raw 准备完成）
 
