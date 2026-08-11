@@ -518,3 +518,40 @@ README.md / .gitattributes
 **正式训练估算**：1.543B tokens / 106.6K t/s ≈ **4.0 小时**（保守按 82K t/s 约 5.2h），远低于 8h 上限，无需放宽。max_steps=23545（1 epoch 精确）。**正式训练待用户确认后启动（Codex 不自动启动）**。
 
 已知注意点：服务器 12:11 被其他用户重启过一次（tokenizer 全量训练进程被中断，改为 100K 行抽样训练——tokenizer 抽样训练为标准实践，不影响词表质量）；cpolar 隧道频繁抖动（多次重连，均为隧道层问题，非服务器故障）。
+
+## 2026-08-11 补充：阶段 8 正式训练完成（80.35M 主线模型）
+
+正式训练（run `runs/20260811-204724`，用户 2026-08-11 确认启动）完成：
+
+| 指标 | 值 |
+|---|---|
+| 模型 | 80.35M（L20 / h512 / int2048 / 8 heads / 32k tied / seq 1024 / BF16） |
+| 数据 | minimind-pretrain train 1,543,221,164 tokens（1 epoch 精确，max_steps 23545） |
+| 时长 | 10,870s = **3.02 小时**（预算 8h 内 ✓，avg 142K tokens/s，avg MFU 18.0%） |
+| loss | train 10.498 → 2.335；**best val 2.3827（ppl 10.83）@ step 23000** |
+| val-train gap | 0.048（小，无过拟合，Q8 口径 ✓） |
+| 显存 | 峰值 6.84GB |
+| 生成 | init 乱码 → final 连贯英文结构（"Once upon a time, there was a little girl named Lily..."）；重复退化（distinct 4-gram 0.24/0.89），80M 容量正常现象 |
+| checkpoint | step-2000…23545 共 12 个 + latest.pt |
+
+对照（跨 tokenizer/语料 ppl 不可直接比，Q14 教学点；此处仅列规模/训练框架对照）：
+
+```text
+5.32M  Wikitext/ts-32k  80M tokens  t/p=15.0  val ppl 114.37
+26.8M  Wikitext/ts-32k  80M tokens  t/p=3.0   val ppl 43.32
+80.35M mainline  minimind/ml-32k  1.543B tokens  t/p=19.2  val ppl 10.83
+```
+
+阶段 8 验收逐项证据：
+
+- 数据治理产物齐全：minimind-pretrain（train/validation parquet + token 流 + manifest minimind-pretrain.json；mini 100% 重叠排除报告 reports/minimind-overlap.json）✓
+- 规模决策有完整证据：实测 1.543B tokens → D≈20N → 80.35M（t/p=19.2）✓
+- 无 NaN/Inf；validation loss 下降（5.19@1000 → 2.38@23000）✓
+- resume 可用（bench step-75 恢复连续，本次正式训练未中断无需恢复）✓
+- 单次任务 3.02h ≤8h 无需放宽 ✓
+- 与既有小模型数据点对照表（如上）✓
+- checkpoint 可重新加载（step-2000 起 12 个 + latest）✓
+- 生成样本入库（samples.jsonl：init/final）✓
+- 教程（docs/tutorials/06）待撰写——阶段 9 前置
+
+已知限制：val ppl 跨 tokenizer 不可直接比较（Q14）；生成存在重复退化（80M 容量 + 1 epoch 的正常现象，阶段 9 SFT 后观察）。
