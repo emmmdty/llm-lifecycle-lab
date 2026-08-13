@@ -555,3 +555,13 @@ README.md / .gitattributes
 - 教程（docs/tutorials/06）待撰写——阶段 9 前置
 
 已知限制：val ppl 跨 tokenizer 不可直接比较（Q14）；生成存在重复退化（80M 容量 + 1 epoch 的正常现象，阶段 9 SFT 后观察）。
+
+## 2026-08-13 补充：服务器每日定时重启（环境事实）与 2/3 epoch 实验续跑
+
+**环境事实（重要）**：`last -x reboot` 显示 5090 在 2026-08-11 12:10 与 2026-08-12 12:21 连续两天中午重启；ps 存在 root 的 `unattended-upgrade-shutdown --wait-for-signal` 进程。结论：**服务器存在每日定时升级重启窗口（约每天中午 12:10–12:21），跨窗口的长训练任务会被中断**。对策：训练必须依赖 checkpoint resume 续跑（项目已内置该机制）；跨窗口任务按"多次 resume"模式执行，每次中断后从最近 checkpoint 恢复。
+
+**2/3 epoch 对照实验（Q3 在 80.35M 上的延伸，用户 2026-08-12 确认）**：
+
+- 2ep（run 20260812-095131，config mainline-2epoch.json，max_steps 47090）：2026-08-12 09:51 启动，12:16 被服务器重启中断（step 20030，checkpoint step-20000 已保存）；2026-08-13 09:16 从 step-20000 resume 续跑（resume 连续性：loss 2.491 与中断前连续）。
+- 3ep（config mainline-3epoch.json，max_steps 70635）：待 2ep 完成后启动；单段预计 ~9h 超 8h 默认上限，放宽理由已记录（用户指定 epoch 对照实验），靠 resume 分多段完成。
+- 中间 checkpoint 保留策略：ckpt_every 5000（step-5000/10000/15000/20000/…），单个约 964MB。
